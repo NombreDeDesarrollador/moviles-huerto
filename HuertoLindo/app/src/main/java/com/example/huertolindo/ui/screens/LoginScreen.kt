@@ -12,10 +12,10 @@ import com.tuempresa.huertoescolar.viewmodel.HuertoViewModel
 @Composable
 fun LoginScreen(
     viewModel: HuertoViewModel,
-    onLoginSuccess: (String) -> Unit
+    onLoginSuccess: (String) -> Unit // Esto recibe el perfil y avisa al MainActivity para cambiar de pantalla
 ) {
     var nombre by remember { mutableStateOf("") }
-    var perfilSeleccionado by remember { mutableStateOf("estudiante") }
+    var perfilSeleccionado by remember { mutableStateOf("estudiante") } // Por defecto estudiante
 
     Column(
         modifier = Modifier
@@ -24,8 +24,9 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Título de la App
         Text(
-            text = "Huerto Escolar",
+            text = "🌱 Huerto Escolar",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -40,6 +41,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // Campo de texto para el nombre (aquí escribiste "Vicente")
         OutlinedTextField(
             value = nombre,
             onValueChange = { nombre = it },
@@ -50,6 +52,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Selector de rol (Administrador vs Estudiante)
         Text(text = "Selecciona tu rol:", style = MaterialTheme.typography.bodyLarge)
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -78,6 +81,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // Botón de ingreso principal
         Button(
             onClick = {
                 val nombreFinal = if (nombre.isBlank()) {
@@ -86,15 +90,16 @@ fun LoginScreen(
                     nombre
                 }
 
+                // 1. Creamos el usuario y lo guardamos en el ViewModel
                 val usuarioFalso = Usuario(
                     id = "1",
                     nombre = nombreFinal,
                     perfil = perfilSeleccionado,
                     tallerAsignado = "Taller de Huerto Básico"
                 )
-
                 viewModel.iniciarSesion(usuarioFalso)
 
+                // 2. ¡IMPORTANTE! Llamamos a esta función para que el MainActivity se entere y cambie de pantalla
                 onLoginSuccess(perfilSeleccionado)
             },
             modifier = Modifier.fillMaxWidth()

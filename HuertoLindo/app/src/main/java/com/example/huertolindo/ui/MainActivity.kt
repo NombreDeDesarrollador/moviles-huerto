@@ -1,4 +1,4 @@
-package com.example.huertolindo.ui
+package com.example.huertolindo
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,14 +8,16 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.example.huertolindo.ui.screens.AdminDashboardScreen
+import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.LoginScreen
 import com.example.huertolindo.ui.theme.HuertoLindoTheme
 import com.tuempresa.huertoescolar.viewmodel.HuertoViewModel
 
 class MainActivity : ComponentActivity() {
 
-    // Inicializamos el ViewModel que gestionará los datos de la app
     private val huertoViewModel: HuertoViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,14 +29,25 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Llamamos a nuestra pantalla de Login pasándole el ViewModel
-                    LoginScreen(viewModel = huertoViewModel) { perfilSeleccionado ->
-                        // Aquí sabremos a qué rol ingresó ("administrador" o "estudiante")
-                        // Más adelante cambiaremos esto para abrir pantallas distintas según el rol.
+                    // Variable de estado para cambiar la pantalla en tiempo real
+                    var pantallaActual by remember { mutableStateOf("login") }
+
+                    when (pantallaActual) {
+                        "login" -> {
+                            LoginScreen(viewModel = huertoViewModel) { perfil ->
+                                // Cuando presiones 'Iniciar Sesión', cambia la variable
+                                if (perfil == "administrador") {
+                                    pantallaActual = "admin"
+                                } else {
+                                    pantallaActual = "estudiante"
+                                }
+                            }
+                        }
+                        "admin" -> AdminDashboardScreen(viewModel = huertoViewModel)
+                        "estudiante" -> EstudianteDashboardScreen(viewModel = huertoViewModel)
                     }
                 }
             }
         }
     }
 }
-
