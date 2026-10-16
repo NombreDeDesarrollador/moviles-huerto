@@ -1,20 +1,22 @@
 package com.example.huertolindo.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
 @Composable
 fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
-    var nombre by remember { mutableStateOf("") }
-    var perfilSeleccionado by remember { mutableStateOf("estudiante") }
-    var intentoIniciarSesion by remember { mutableStateOf(false) }
-    val nombreValido = nombre.length >= 2 && nombre.all { it.isLetter() }
+    var correo by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var mensajeError by remember { mutableStateOf<String?>(null) }
+    var cargando by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -32,90 +34,76 @@ fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
-            value = nombre,
-            onValueChange = { nombre = it },
-            label = { Text("Nombre del usuario ficticio") },
+            value = correo,
+            onValueChange = {
+                correo = it
+                mensajeError = null
+            },
+            label = { Text("Correo electrónico") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            isError = intentoIniciarSesion && !nombreValido,
-            supportingText = if (intentoIniciarSesion && !nombreValido) {
-                {
-                    Text(
-                        when {
-                            nombre.isBlank() -> "Ingresa tu nombre."
-                            nombre.length < 2 -> "El nombre debe tener al menos 2 letras."
-                            else -> "El nombre solo puede contener letras."
-                        }
-                    )
-                }
-            } else null
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            isError = mensajeError != null
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Selecciona tu perfil:",
-            style = MaterialTheme.typography.bodyLarge
+        OutlinedTextField(
+            value = password,
+            onValueChange = {
+                password = it
+                mensajeError = null
+            },
+            label = { Text("Contraseña") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            isError = mensajeError != null
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = { perfilSeleccionado = "administrador" },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (perfilSeleccionado == "administrador") {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    }
-                )
-            ) {
-                Text("Administrador")
-            }
-
-            Button(
-                onClick = { perfilSeleccionado = "estudiante" },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (perfilSeleccionado == "estudiante") {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    }
-                )
-            ) {
-                Text("Estudiante")
-            }
+        mensajeError?.let { error ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = {
-                if (!nombreValido) {
-                    intentoIniciarSesion = true
-                    return@Button
+                if (correo.isBlank() || password.isBlank()) {
+                    mensajeError = "Ingresa tu correo y contraseña."
+                } else {
+                    cargando = true
+                    mensajeError = null
+                    viewModel.iniciarSesion(correo, password) { resultado ->
+                        cargando = false
+                        when (resultado) {
+                            is HuertoViewModel.ResultadoInicioSesion.Exito ->
+                                onLoginSuccess(resultado.usuario.perfil)
+                            HuertoViewModel.ResultadoInicioSesion.CredencialesInvalidas ->
+                                mensajeError = "El correo o la contraseña no son correctos."
+                            HuertoViewModel.ResultadoInicioSesion.ErrorDeBaseDeDatos ->
+                                mensajeError = "No se pudo acceder a la base de datos local."
+                        }
+                    }
                 }
-
-                viewModel.iniciarSesion(
-                    Usuario(
-                        id = "1",
-                        nombre = nombre,
-                        perfil = perfilSeleccionado,
-                        tallerAsignado = "General"
-                    )
-                )
-
-                onLoginSuccess(perfilSeleccionado)
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando
         ) {
-            Text("Iniciar Sesión")
+            if (cargando) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("Iniciar sesión")
+            }
         }
     }
 }

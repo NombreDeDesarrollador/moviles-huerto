@@ -1,13 +1,21 @@
 package com.example.huertolindo.viewmodel
 
+import android.app.Application
+import android.database.sqlite.SQLiteException
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.example.huertolindo.data.local.UsuarioDatabaseHelper
 import com.example.huertolindo.data.model.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class HuertoViewModel : ViewModel() {
+class HuertoViewModel(application: Application) : AndroidViewModel(application) {
+    private val usuarioDatabase = UsuarioDatabaseHelper(application)
 
     var usuarioActual by mutableStateOf<Usuario?>(null)
         private set
@@ -36,11 +44,41 @@ class HuertoViewModel : ViewModel() {
         )
     }
 
-    fun iniciarSesion(usuario: Usuario) {
-        usuarioActual = usuario
+    fun iniciarSesion(
+        correo: String,
+        password: String,
+        onResult: (ResultadoInicioSesion) -> Unit
+    ) {
+        viewModelScope.launch {
+            val resultado = try {
+                withContext(Dispatchers.IO) {
+                    usuarioDatabase.autenticar(correo, password)
+                }?.let { ResultadoInicioSesion.Exito(it) } ?: ResultadoInicioSesion.CredencialesInvalidas
+            } catch (exception: SQLiteException) {
+                ResultadoInicioSesion.ErrorDeBaseDeDatos
+            } catch (exception: java.security.GeneralSecurityException) {
+                ResultadoInicioSesion.ErrorDeBaseDeDatos
+            }
+
+            if (resultado is ResultadoInicioSesion.Exito) {
+                usuarioActual = resultado.usuario
+            }
+            onResult(resultado)
+        }
     }
 
     fun actualizarFotoPerfil(uri: Uri?) {
         fotoPerfilUri = uri
+    }
+
+    override fun onCleared() {
+        usuarioDatabase.close()
+        super.onCleared()
+    }
+
+    sealed interface ResultadoInicioSesion {
+        data class Exito(val usuario: Usuario) : ResultadoInicioSesion
+        data object CredencialesInvalidas : ResultadoInicioSesion
+        data object ErrorDeBaseDeDatos : ResultadoInicioSesion
     }
 }
