@@ -161,7 +161,8 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
 @Composable
 fun TareasScreen(
     viewModel: HuertoViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTaskClick: (String) -> Unit
 ) {
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
@@ -175,28 +176,17 @@ fun TareasScreen(
         }
         if (tareas.isEmpty()) Text("No tienes tareas asignadas.")
         tareas.forEach { tarea ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            ElevatedCard(
+                onClick = { onTaskClick(tarea.id) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(tarea.titulo, style = MaterialTheme.typography.titleMedium)
-                    Text(tarea.descripcion)
-                    Text("Sector: ${viewModel.listaSectores.value.firstOrNull { it.id == tarea.sectorId }?.nombre ?: "No asignado"}")
-                    val asignado = viewModel.usuariosDisponibles.value.firstOrNull { it.id == tarea.asignadoA }
-                    val nombreAsignado = asignado?.nombreCompleto ?: tarea.asignadoA
-                    Text("Asignada a: $nombreAsignado · ${tarea.estado}")
-                    if (esAdministrador && tarea.estado == "Por validar") {
-                        Button(onClick = {
-                            viewModel.validarTarea(tarea.id)
-                        }) {
-                            Text("Validar actividad")
-                        }
-                    } else if (!esAdministrador && tarea.estado == "Pendiente") {
-                        Button(onClick = { viewModel.enviarTareaARevision(tarea.id) }) {
-                            Text("Enviar a revisión")
-                        }
-                    }
+                    Text("Estado: ${tarea.estado}")
+                    Text("Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}")
                 }
             }
         }
@@ -206,15 +196,58 @@ fun TareasScreen(
             sectores = viewModel.listaSectores.value,
             estudiantes = viewModel.usuariosDisponibles.value.filter { it.perfil == "estudiante" },
             onDismiss = { mostrarFormulario = false },
-            onSave = { titulo, descripcion, sectorId, usuarioId ->
-                if (viewModel.crearTarea(titulo, descripcion, sectorId, usuarioId)) {
+            onSave = { titulo, instrucciones, sectorId, usuarioId, fechaProgramada ->
+                val creada = viewModel.crearTarea(
+                    titulo,
+                    instrucciones,
+                    sectorId,
+                    usuarioId,
+                    fechaProgramada
+                )
+                if (creada) {
                     error = null
                     mostrarFormulario = false
                 } else {
-                    error = "Completa los datos y selecciona un sector y estudiante."
+                    error = "Completa los datos, ingresa una fecha válida (AAAA-MM-DD) y selecciona un sector y estudiante."
                 }
+                creada
             }
         )
+    }
+}
+
+@Composable
+fun DetalleTareaScreen(
+    viewModel: HuertoViewModel,
+    tareaId: String,
+    onBack: () -> Unit
+) {
+    val tarea = viewModel.tareasVisibles.firstOrNull { it.id == tareaId }
+    ScreenLayout(tarea?.titulo ?: "Tarea no encontrada", onBack) {
+        if (tarea == null) {
+            Text("La tarea seleccionada ya no está disponible.")
+            return@ScreenLayout
+        }
+        val sector = viewModel.listaSectores.value.firstOrNull { it.id == tarea.sectorId }
+        val estudiante = viewModel.usuariosDisponibles.value.firstOrNull { it.id == tarea.asignadoA }
+        Text("Instrucciones", style = MaterialTheme.typography.titleMedium)
+        Text(tarea.descripcion, style = MaterialTheme.typography.bodyLarge)
+        Text("Estado: ${tarea.estado}", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}",
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Text("Sector: ${sector?.nombre ?: "No asignado"}")
+        Text("Asignada a: ${estudiante?.nombreCompleto ?: tarea.asignadoA}")
+        if (viewModel.esAdministrador && tarea.estado == "Por validar") {
+            Button(onClick = { viewModel.validarTarea(tarea.id) }) {
+                Text("Validar actividad")
+            }
+        } else if (!viewModel.esAdministrador && tarea.estado == "Pendiente") {
+            Button(onClick = { viewModel.enviarTareaARevision(tarea.id) }) {
+                Text("Enviar a revisión")
+            }
+        }
     }
 }
 
@@ -326,19 +359,30 @@ private fun FormularioTarea(
     sectores: List<Sector>,
     estudiantes: List<Usuario>,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit
+    onSave: (String, String, String, String, String) -> Boolean
 ) {
     var titulo by remember { mutableStateOf("") }
-    var descripcion by remember { mutableStateOf("") }
+    var instrucciones by remember { mutableStateOf("") }
     var sectorId by remember { mutableStateOf("") }
     var usuarioId by remember { mutableStateOf("") }
+    var fechaProgramada by remember { mutableStateOf("") }
+    var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Crear y asignar tarea") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedTextField(titulo, { titulo = it }, label = { Text("Título") }, singleLine = true)
-                OutlinedTextField(descripcion, { descripcion = it }, label = { Text("Descripción") })
+                OutlinedTextField(instrucciones, { instrucciones = it }, label = { Text("Instrucciones") })
+                OutlinedTextField(
+                    fechaProgramada,
+                    { fechaProgramada = it },
+                    label = { Text("Fecha programada (AAAA-MM-DD)") },
+                    singleLine = true
+                )
                 CampoSeleccion(
                     etiqueta = "Sector",
                     opciones = sectores.map { it.id to it.nombre },
@@ -354,10 +398,18 @@ private fun FormularioTarea(
                 if (sectores.isEmpty() || estudiantes.isEmpty()) {
                     Text("Se necesita al menos un sector y un estudiante registrado.")
                 }
+                if (mostrarError) {
+                    Text(
+                        "Completa los campos, selecciona sector y estudiante e ingresa una fecha válida (AAAA-MM-DD).",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(titulo, descripcion, sectorId, usuarioId) }) { Text("Crear") }
+            TextButton(onClick = {
+                mostrarError = !onSave(titulo, instrucciones, sectorId, usuarioId, fechaProgramada)
+            }) { Text("Crear") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )

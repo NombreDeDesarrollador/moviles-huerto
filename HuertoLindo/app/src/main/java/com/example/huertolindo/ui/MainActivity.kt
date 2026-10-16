@@ -18,6 +18,7 @@ import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
 import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.DetalleCultivoScreen
+import com.example.huertolindo.ui.screens.DetalleTareaScreen
 import com.example.huertolindo.ui.screens.DetalleSectorScreen
 import com.example.huertolindo.ui.screens.LoginScreen
 import com.example.huertolindo.ui.screens.ReportesScreen
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
                     var mensajeRegistro by remember { mutableStateOf<String?>(null) }
                     var sectorSeleccionado by remember { mutableStateOf("") }
                     var cultivoSeleccionado by remember { mutableStateOf("") }
+                    var tareaSeleccionada by remember { mutableStateOf("") }
 
                     when {
                         pantallaActual !in setOf("login", "registro") &&
@@ -143,7 +145,16 @@ class MainActivity : ComponentActivity() {
                         )
                         "tareas" -> TareasScreen(
                             viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
+                            onBack = { pantallaActual = "menu" },
+                            onTaskClick = {
+                                tareaSeleccionada = it
+                                pantallaActual = "detalleTarea"
+                            }
+                        )
+                        "detalleTarea" -> DetalleTareaScreen(
+                            viewModel = huertoViewModel,
+                            tareaId = tareaSeleccionada,
+                            onBack = { pantallaActual = "tareas" }
                         )
                         "sensores" -> SensoresScreen(
                             viewModel = huertoViewModel,

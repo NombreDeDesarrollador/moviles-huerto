@@ -6,5 +6,6 @@ data class Tarea(
     val descripcion: String,
     val sectorId: String,
     val asignadoA: String,
-    val estado: String
+    val estado: String,
+    val fechaProgramada: String = ""
 )

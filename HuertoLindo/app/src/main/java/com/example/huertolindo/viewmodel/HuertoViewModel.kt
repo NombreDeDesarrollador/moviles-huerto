@@ -15,6 +15,9 @@ import com.example.huertolindo.data.security.PermisosHuerto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class HuertoViewModel(application: Application) : AndroidViewModel(application) {
     private val usuarioDatabase = UsuarioDatabaseHelper(application)
@@ -66,8 +69,8 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         )
 
         listaTareas.value = listOf(
-            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "student-vicente", estado = "Pendiente"),
-            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "student-matias", estado = "Pendiente")
+            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "student-vicente", estado = "Pendiente", fechaProgramada = "2026-10-17"),
+            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "student-matias", estado = "Pendiente", fechaProgramada = "2026-10-18")
         )
     }
 
@@ -89,9 +92,16 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         return true
     }
 
-    fun crearTarea(titulo: String, descripcion: String, sectorId: String, usuarioId: String): Boolean {
+    fun crearTarea(
+        titulo: String,
+        descripcion: String,
+        sectorId: String,
+        usuarioId: String,
+        fechaProgramada: String
+    ): Boolean {
         if (!esAdministrador ||
             titulo.isBlank() || descripcion.isBlank() ||
+            !esFechaProgramadaValida(fechaProgramada) ||
             listaSectores.value.none { it.id == sectorId } ||
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
         ) return false
@@ -102,9 +112,19 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             descripcion = descripcion.trim(),
             sectorId = sectorId,
             asignadoA = usuarioId,
-            estado = "Pendiente"
+            estado = "Pendiente",
+            fechaProgramada = fechaProgramada.trim()
         )
         return true
+    }
+
+    private fun esFechaProgramadaValida(fecha: String): Boolean {
+        if (!fecha.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return false
+        val formato = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            isLenient = false
+        }
+        val posicion = ParsePosition(0)
+        return formato.parse(fecha, posicion) != null && posicion.index == fecha.length
     }
 
     fun agregarSector(nombre: String, descripcion: String): Boolean {
