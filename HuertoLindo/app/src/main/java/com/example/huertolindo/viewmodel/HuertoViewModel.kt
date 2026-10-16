@@ -27,6 +27,9 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     var listaSectores = mutableStateOf(listOf<Sector>())
         private set
 
+    var listaCultivos = mutableStateOf(listOf<Cultivo>())
+        private set
+
     var listaTareas = mutableStateOf(listOf<Tarea>())
         private set
 
@@ -40,9 +43,26 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             Sector(id = "2", nombre = "Sector Sur", descripcion = "Zona de raíces y tubérculos", estado = "Disponible")
         )
 
-        listaTareas.value = listOf(
-            Tarea(id = "1", titulo = "Regar tomates", descripcion = "Aplicar 500ml de agua en la base", sectorId = "1", asignadoA = "estudiante1", estado = "Pendiente")
+        listaCultivos.value = listOf(
+            Cultivo("1", "Lechuga", "1", "2026-09-20", "En crecimiento", "Cada 2 días"),
+            Cultivo("2", "Espinaca", "1", "2026-09-25", "En crecimiento", "Cada 2 días"),
+            Cultivo("3", "Zanahoria", "2", "2026-09-10", "Desarrollo", "Cada 3 días")
         )
+
+        listaTareas.value = listOf(
+            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "estudiante1", estado = "Pendiente"),
+            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "estudiante2", estado = "Pendiente")
+        )
+    }
+
+    fun cambiarEstadoTarea(tareaId: String) {
+        listaTareas.value = listaTareas.value.map { tarea ->
+            if (tarea.id == tareaId) {
+                tarea.copy(estado = if (tarea.estado == "Completada") "Pendiente" else "Completada")
+            } else {
+                tarea
+            }
+        }
     }
 
     fun iniciarSesion(

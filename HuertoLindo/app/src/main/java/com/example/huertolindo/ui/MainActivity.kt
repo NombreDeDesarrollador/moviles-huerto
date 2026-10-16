@@ -15,8 +15,14 @@ import androidx.compose.ui.Modifier
 import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
 import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
+import com.example.huertolindo.ui.screens.DetalleCultivoScreen
+import com.example.huertolindo.ui.screens.DetalleSectorScreen
 import com.example.huertolindo.ui.screens.LoginScreen
+import com.example.huertolindo.ui.screens.ReportesScreen
 import com.example.huertolindo.ui.screens.RegistroScreen
+import com.example.huertolindo.ui.screens.SectoresScreen
+import com.example.huertolindo.ui.screens.SensoresScreen
+import com.example.huertolindo.ui.screens.TareasScreen
 import com.example.huertolindo.ui.theme.HuertoLindoTheme
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
@@ -37,6 +43,8 @@ class MainActivity : ComponentActivity() {
                     var pantallaActual by remember { mutableStateOf("login") }
                     var perfilActual by remember { mutableStateOf("estudiante") }
                     var mensajeRegistro by remember { mutableStateOf<String?>(null) }
+                    var sectorSeleccionado by remember { mutableStateOf("") }
+                    var cultivoSeleccionado by remember { mutableStateOf("") }
 
                     when (pantallaActual) {
                         "login" -> {
@@ -67,12 +75,19 @@ class MainActivity : ComponentActivity() {
                             if (perfilActual == "administrador") {
                                 AdminDashboardScreen(
                                     viewModel = huertoViewModel,
-                                    onProfileClick = { pantallaActual = "perfil" }
+                                    onProfileClick = { pantallaActual = "perfil" },
+                                    onSectorsClick = { pantallaActual = "sectores" },
+                                    onTasksClick = { pantallaActual = "tareas" },
+                                    onSensorsClick = { pantallaActual = "sensores" },
+                                    onReportsClick = { pantallaActual = "reportes" }
                                 )
                             } else {
                                 EstudianteDashboardScreen(
                                     viewModel = huertoViewModel,
-                                    onProfileClick = { pantallaActual = "perfil" }
+                                    onProfileClick = { pantallaActual = "perfil" },
+                                    onSectorsClick = { pantallaActual = "sectores" },
+                                    onTasksClick = { pantallaActual = "tareas" },
+                                    onSensorsClick = { pantallaActual = "sensores" }
                                 )
                             }
                         }
@@ -90,6 +105,40 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                        "sectores" -> SectoresScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" },
+                            onSectorClick = {
+                                sectorSeleccionado = it
+                                pantallaActual = "detalleSector"
+                            }
+                        )
+                        "detalleSector" -> DetalleSectorScreen(
+                            viewModel = huertoViewModel,
+                            sectorId = sectorSeleccionado,
+                            onBack = { pantallaActual = "sectores" },
+                            onCultivoClick = {
+                                cultivoSeleccionado = it
+                                pantallaActual = "detalleCultivo"
+                            }
+                        )
+                        "detalleCultivo" -> DetalleCultivoScreen(
+                            viewModel = huertoViewModel,
+                            cultivoId = cultivoSeleccionado,
+                            onBack = { pantallaActual = "detalleSector" }
+                        )
+                        "tareas" -> TareasScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "sensores" -> SensoresScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "reportes" -> ReportesScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
                     }
                 }
             }

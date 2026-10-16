@@ -1,42 +1,52 @@
 package com.example.huertolindo.ui.screens
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
 @Composable
-fun EstudianteDashboardScreen(viewModel: HuertoViewModel, onProfileClick: () -> Unit) {
+fun EstudianteDashboardScreen(
+    viewModel: HuertoViewModel,
+    onProfileClick: () -> Unit,
+    onSectorsClick: () -> Unit = {},
+    onTasksClick: () -> Unit = {},
+    onSensorsClick: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(16.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            FilledTonalButton(
-                onClick = onProfileClick,
-                modifier = Modifier.defaultMinSize(minWidth = 120.dp, minHeight = 56.dp)
-            ) {
-                Text("Mi perfil")
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
+        FilledTonalButton(onClick = onProfileClick) { Text("Mi perfil") }
+        Text("Mi huerto", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "Menú de estudiante",
-            style = MaterialTheme.typography.headlineMedium
+            "Hola, ${viewModel.usuarioActual?.nombre ?: "Estudiante"}",
+            style = MaterialTheme.typography.titleLarge
         )
-        Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = viewModel.usuarioActual?.nombre ?: "Estudiante",
-            style = MaterialTheme.typography.headlineSmall
+            "Tienes ${viewModel.listaTareas.value.count { it.estado != "Completada" }} tareas por realizar.",
+            style = MaterialTheme.typography.bodyLarge
         )
-        Spacer(modifier = Modifier.weight(1f))
+        DashboardAction("Explorar sectores", "Consulta cultivos y detalles de cada sector.", onSectorsClick)
+        DashboardAction("Mis tareas", "Marca como completadas las labores que termines.", onTasksClick)
+        DashboardAction("Sensores", "Revisa las condiciones simuladas del huerto.", onSensorsClick)
+        Spacer(Modifier.padding(bottom = 8.dp))
     }
 }
