@@ -13,6 +13,8 @@ import com.example.huertolindo.viewmodel.HuertoViewModel
 fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
     var nombre by remember { mutableStateOf("") }
     var perfilSeleccionado by remember { mutableStateOf("estudiante") }
+    var intentoIniciarSesion by remember { mutableStateOf(false) }
+    val nombreValido = nombre.length >= 2 && nombre.all { it.isLetter() }
 
     Column(
         modifier = Modifier
@@ -34,7 +36,19 @@ fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
             onValueChange = { nombre = it },
             label = { Text("Nombre del usuario ficticio") },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            isError = intentoIniciarSesion && !nombreValido,
+            supportingText = if (intentoIniciarSesion && !nombreValido) {
+                {
+                    Text(
+                        when {
+                            nombre.isBlank() -> "Ingresa tu nombre."
+                            nombre.length < 2 -> "El nombre debe tener al menos 2 letras."
+                            else -> "El nombre solo puede contener letras."
+                        }
+                    )
+                }
+            } else null
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -83,10 +97,15 @@ fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
 
         Button(
             onClick = {
+                if (!nombreValido) {
+                    intentoIniciarSesion = true
+                    return@Button
+                }
+
                 viewModel.iniciarSesion(
                     Usuario(
                         id = "1",
-                        nombre = if (nombre.isBlank()) "Usuario" else nombre,
+                        nombre = nombre,
                         perfil = perfilSeleccionado,
                         tallerAsignado = "General"
                     )
