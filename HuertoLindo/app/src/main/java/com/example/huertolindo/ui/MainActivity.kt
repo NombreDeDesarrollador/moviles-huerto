@@ -9,15 +9,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
 import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.LoginScreen
 import com.example.huertolindo.ui.theme.HuertoLindoTheme
-import com.tuempresa.huertoescolar.viewmodel.HuertoViewModel
+import com.example.huertolindo.viewmodel.HuertoViewModel
 
 class MainActivity : ComponentActivity() {
 
+    // Inicializamos el ViewModel
     private val huertoViewModel: HuertoViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,22 +33,40 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Variable de estado para cambiar la pantalla en tiempo real
                     var pantallaActual by remember { mutableStateOf("login") }
+                    var perfilActual by remember { mutableStateOf("estudiante") }
 
                     when (pantallaActual) {
                         "login" -> {
-                            LoginScreen(viewModel = huertoViewModel) { perfil ->
-                                // Cuando presiones 'Iniciar Sesión', cambia la variable
-                                if (perfil == "administrador") {
-                                    pantallaActual = "admin"
-                                } else {
-                                    pantallaActual = "estudiante"
+                            LoginScreen(
+                                viewModel = huertoViewModel,
+                                onLoginSuccess = { perfilSeleccionado ->
+                                    perfilActual = perfilSeleccionado
+                                    pantallaActual = "menu"
                                 }
+                            )
+                        }
+                        "menu" -> {
+                            if (perfilActual == "administrador") {
+                                AdminDashboardScreen(
+                                    viewModel = huertoViewModel,
+                                    onProfileClick = { pantallaActual = "perfil" }
+                                )
+                            } else {
+                                EstudianteDashboardScreen(
+                                    viewModel = huertoViewModel,
+                                    onProfileClick = { pantallaActual = "perfil" }
+                                )
                             }
                         }
-                        "admin" -> AdminDashboardScreen(viewModel = huertoViewModel)
-                        "estudiante" -> EstudianteDashboardScreen(viewModel = huertoViewModel)
+                        "perfil" -> {
+                            FotoScreen(
+                                nombreUsuario = huertoViewModel.usuarioActual?.nombre ?: "Usuario",
+                                fotoPerfil = huertoViewModel.fotoPerfilUri,
+                                onFotoPerfilChange = huertoViewModel::actualizarFotoPerfil,
+                                onVolver = { pantallaActual = "menu" }
+                            )
+                        }
                     }
                 }
             }

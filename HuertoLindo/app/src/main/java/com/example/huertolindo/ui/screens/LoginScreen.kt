@@ -6,16 +6,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tuempresa.huertoescolar.data.model.Usuario
-import com.tuempresa.huertoescolar.viewmodel.HuertoViewModel
+import com.example.huertolindo.data.model.Usuario
+import com.example.huertolindo.viewmodel.HuertoViewModel
 
 @Composable
-fun LoginScreen(
-    viewModel: HuertoViewModel,
-    onLoginSuccess: (String) -> Unit // Esto recibe el perfil y avisa al MainActivity para cambiar de pantalla
-) {
+fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
     var nombre by remember { mutableStateOf("") }
-    var perfilSeleccionado by remember { mutableStateOf("estudiante") } // Por defecto estudiante
+    var perfilSeleccionado by remember { mutableStateOf("estudiante") }
 
     Column(
         modifier = Modifier
@@ -24,24 +21,14 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Título de la App
         Text(
-            text = "🌱 Huerto Escolar",
+            text = "Huerto Escolar",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Ingresa con una cuenta de prueba",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Campo de texto para el nombre (aquí escribiste "Vicente")
         OutlinedTextField(
             value = nombre,
             onValueChange = { nombre = it },
@@ -50,20 +37,28 @@ fun LoginScreen(
             singleLine = true
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Selector de rol (Administrador vs Estudiante)
-        Text(text = "Selecciona tu rol:", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = "Selecciona tu perfil:",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
                 onClick = { perfilSeleccionado = "administrador" },
+                modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (perfilSeleccionado == "administrador") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = if (perfilSeleccionado == "administrador") {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    }
                 )
             ) {
                 Text("Administrador")
@@ -71,35 +66,32 @@ fun LoginScreen(
 
             Button(
                 onClick = { perfilSeleccionado = "estudiante" },
+                modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (perfilSeleccionado == "estudiante") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = if (perfilSeleccionado == "estudiante") {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    }
                 )
             ) {
                 Text("Estudiante")
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón de ingreso principal
         Button(
             onClick = {
-                val nombreFinal = if (nombre.isBlank()) {
-                    if (perfilSeleccionado == "administrador") "Profe Juan" else "Estudiante Ana"
-                } else {
-                    nombre
-                }
-
-                // 1. Creamos el usuario y lo guardamos en el ViewModel
-                val usuarioFalso = Usuario(
-                    id = "1",
-                    nombre = nombreFinal,
-                    perfil = perfilSeleccionado,
-                    tallerAsignado = "Taller de Huerto Básico"
+                viewModel.iniciarSesion(
+                    Usuario(
+                        id = "1",
+                        nombre = if (nombre.isBlank()) "Usuario" else nombre,
+                        perfil = perfilSeleccionado,
+                        tallerAsignado = "General"
+                    )
                 )
-                viewModel.iniciarSesion(usuarioFalso)
 
-                // 2. ¡IMPORTANTE! Llamamos a esta función para que el MainActivity se entere y cambie de pantalla
                 onLoginSuccess(perfilSeleccionado)
             },
             modifier = Modifier.fillMaxWidth()

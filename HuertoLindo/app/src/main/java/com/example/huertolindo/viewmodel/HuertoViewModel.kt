@@ -1,16 +1,18 @@
-package com.tuempresa.huertoescolar.viewmodel
+package com.example.huertolindo.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import com.example.huertolindo.data.model.Sector
-import com.example.huertolindo.data.model.Tarea
-import com.tuempresa.huertoescolar.data.model.*
+import com.example.huertolindo.data.model.*
 
 class HuertoViewModel : ViewModel() {
 
     var usuarioActual by mutableStateOf<Usuario?>(null)
+        private set
+
+    var fotoPerfilUri by mutableStateOf<Uri?>(null)
         private set
 
     var listaSectores = mutableStateOf(listOf<Sector>())
@@ -25,12 +27,12 @@ class HuertoViewModel : ViewModel() {
 
     private fun cargarDatosFicticios() {
         listaSectores.value = listOf(
-            Sector("1", "Sector Norte", "Zona de hortalizas de hoja", "En uso"),
-            Sector("2", "Sector Sur", "Zona de raíces y tubérculos", "Disponible")
+            Sector(id = "1", nombre = "Sector Norte", descripcion = "Zona de hortalizas de hoja", estado = "En uso"),
+            Sector(id = "2", nombre = "Sector Sur", descripcion = "Zona de raíces y tubérculos", estado = "Disponible")
         )
 
         listaTareas.value = listOf(
-            Tarea("1", "Regar tomates", "Aplicar 500ml de agua en la base", "1", "estudiante1", "Pendiente")
+            Tarea(id = "1", titulo = "Regar tomates", descripcion = "Aplicar 500ml de agua en la base", sectorId = "1", asignadoA = "estudiante1", estado = "Pendiente")
         )
     }
 
@@ -38,4 +40,7 @@ class HuertoViewModel : ViewModel() {
         usuarioActual = usuario
     }
 
+    fun actualizarFotoPerfil(uri: Uri?) {
+        fotoPerfilUri = uri
+    }
 }

@@ -3,25 +3,40 @@ package com.example.huertolindo.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.tuempresa.huertoescolar.viewmodel.HuertoViewModel
+import com.example.huertolindo.viewmodel.HuertoViewModel
 
 @Composable
-fun AdminDashboardScreen(viewModel: HuertoViewModel) {
+fun AdminDashboardScreen(viewModel: HuertoViewModel, onProfileClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            FilledTonalButton(
+                onClick = onProfileClick,
+                modifier = Modifier.defaultMinSize(minWidth = 120.dp, minHeight = 56.dp)
+            ) {
+                Text("Mi perfil")
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
         Text(
-            text = "Panel de Administrador 👨‍🏫",
+            text = "Menú de administrador",
             style = MaterialTheme.typography.headlineMedium
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Bienvenido/a, ${viewModel.usuarioActual?.nombre ?: "Docente"}")
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = viewModel.usuarioActual?.nombre ?: "Administrador",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(modifier = Modifier.weight(1f))
     }
 }
