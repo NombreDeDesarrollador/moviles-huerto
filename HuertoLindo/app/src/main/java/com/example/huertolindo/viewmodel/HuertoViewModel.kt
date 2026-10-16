@@ -1,41 +1,59 @@
-package com.tuempresa.huertoescolar.viewmodel
+package com.example.huertolindo.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import com.example.huertolindo.data.model.Sector
-import com.example.huertolindo.data.model.Tarea
-import com.tuempresa.huertoescolar.data.model.*
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.huertolindo.data.AppDatabase
+import com.example.huertolindo.data.CultivoRepository
+import com.example.huertolindo.data.model.Cultivo
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
-class HuertoViewModel : ViewModel() {
+class HuertoViewModel(application: Application) : AndroidViewModel(application) {
 
-    var usuarioActual by mutableStateOf<Usuario?>(null)
-        private set
+    private val database = AppDatabase.getInstance(application)
+    private val repository = CultivoRepository(database.cultivoDao())
 
-    var listaSectores = mutableStateOf(listOf<Sector>())
-        private set
+    // Estado observable para Jetpack Compose
+    private val _uiState = MutableStateFlow(CultivoUiState())
+    val uiState: StateFlow<CultivoUiState> = _uiState.asStateFlow()
 
-    var listaTareas = mutableStateOf(listOf<Tarea>())
-        private set
-
-    init {
-        cargarDatosFicticios()
+    fun actualizarNombre(nuevoNombre: String) {
+        _uiState.update { it.copy(nombre = nuevoNombre, errorNombre = false) }
     }
 
-    private fun cargarDatosFicticios() {
-        listaSectores.value = listOf(
-            Sector("1", "Sector Norte", "Zona de hortalizas de hoja", "En uso"),
-            Sector("2", "Sector Sur", "Zona de raíces y tubérculos", "Disponible")
-        )
-
-        listaTareas.value = listOf(
-            Tarea("1", "Regar tomates", "Aplicar 500ml de agua en la base", "1", "estudiante1", "Pendiente")
-        )
+    fun actualizarSector(nuevoSector: String) {
+        _uiState.update { it.copy(sector = nuevoSector, errorSector = false) }
     }
 
-    fun iniciarSesion(usuario: Usuario) {
-        usuarioActual = usuario
-    }
+    fun registrarCultivo() {
+        val estadoActual = _uiState.value
 
+        // Validaciones simples
+        val errorNombre = estadoActual.nombre.isBlank()
+        val errorSector = estadoActual.sector.isBlank()
+
+        if (errorNombre || errorSector) {
+            _uiState.update {
+                it.copy(errorNombre = errorNombre, errorSector = errorSector)
+            }
+        } else {
+            val nuevoCultivo = Cultivo(
+                nombre = estadoActual.nombre,
+                sector = estadoActual.sector,
+                fechaSiembra = "Por definir",
+                estado = "Sembrado"
+            )
+
+            // Guardamos en la base de datos usando una corrutina
+            viewModelScope.launch {
+                repository.guardarCultivo(nuevoCultivo)
+                // Limpiamos el formulario después de guardar
+                _uiState.value = CultivoUiState()
+            }
+        }
+    }
 }
