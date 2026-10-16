@@ -16,6 +16,7 @@ import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
 import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.LoginScreen
+import com.example.huertolindo.ui.screens.RegistroScreen
 import com.example.huertolindo.ui.theme.HuertoLindoTheme
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
@@ -35,14 +36,30 @@ class MainActivity : ComponentActivity() {
                 ) {
                     var pantallaActual by remember { mutableStateOf("login") }
                     var perfilActual by remember { mutableStateOf("estudiante") }
+                    var mensajeRegistro by remember { mutableStateOf<String?>(null) }
 
                     when (pantallaActual) {
                         "login" -> {
                             LoginScreen(
                                 viewModel = huertoViewModel,
+                                mensajeInformativo = mensajeRegistro,
+                                onRegisterClick = {
+                                    mensajeRegistro = null
+                                    pantallaActual = "registro"
+                                },
                                 onLoginSuccess = { perfilSeleccionado ->
                                     perfilActual = perfilSeleccionado
                                     pantallaActual = "menu"
+                                }
+                            )
+                        }
+                        "registro" -> {
+                            RegistroScreen(
+                                viewModel = huertoViewModel,
+                                onBackToLogin = { pantallaActual = "login" },
+                                onRegistrationSuccess = {
+                                    mensajeRegistro = "Cuenta creada. Ahora puedes iniciar sesión."
+                                    pantallaActual = "login"
                                 }
                             )
                         }
@@ -61,10 +78,16 @@ class MainActivity : ComponentActivity() {
                         }
                         "perfil" -> {
                             FotoScreen(
-                                nombreUsuario = huertoViewModel.usuarioActual?.nombre ?: "Usuario",
+                                nombreUsuario = huertoViewModel.usuarioActual?.nombreCompleto ?: "Usuario",
                                 fotoPerfil = huertoViewModel.fotoPerfilUri,
                                 onFotoPerfilChange = huertoViewModel::actualizarFotoPerfil,
-                                onVolver = { pantallaActual = "menu" }
+                                onVolver = { pantallaActual = "menu" },
+                                onCerrarSesion = {
+                                    huertoViewModel.cerrarSesion()
+                                    perfilActual = "estudiante"
+                                    mensajeRegistro = null
+                                    pantallaActual = "login"
+                                }
                             )
                         }
                     }

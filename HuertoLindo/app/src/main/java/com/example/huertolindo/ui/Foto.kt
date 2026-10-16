@@ -24,7 +24,8 @@ fun FotoScreen(
     nombreUsuario: String,
     fotoPerfil: Uri?,
     onFotoPerfilChange: (Uri?) -> Unit,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onCerrarSesion: () -> Unit
 ) {
     val selectorFotos = rememberLauncherForActivityResult(
         contract = PickVisualMedia()
@@ -105,6 +106,10 @@ fun FotoScreen(
             OutlinedButton(onClick = { onFotoPerfilChange(null) }) {
                 Text("Quitar foto")
             }
+        }
+
+        Button(onClick = onCerrarSesion) {
+            Text("Cerrar sesión")
         }
     }
 }

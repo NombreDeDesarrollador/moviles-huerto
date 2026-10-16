@@ -19,8 +19,10 @@ class UsuarioDatabaseHelper(context: Context) :
                 id TEXT PRIMARY KEY NOT NULL,
                 correo TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 nombre TEXT NOT NULL,
+                apellido TEXT NOT NULL DEFAULT '',
                 perfil TEXT NOT NULL,
                 taller_asignado TEXT NOT NULL,
+                password TEXT NOT NULL DEFAULT '',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL
             )
@@ -34,6 +36,7 @@ class UsuarioDatabaseHelper(context: Context) :
                     put("id", account.id)
                     put("correo", account.correo)
                     put("nombre", account.nombre)
+                    put("apellido", "")
                     put("perfil", account.perfil)
                     put("taller_asignado", account.tallerAsignado)
                     put("password_salt", account.passwordSalt)
@@ -47,13 +50,24 @@ class UsuarioDatabaseHelper(context: Context) :
         }
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE $TABLE_USERS ADD COLUMN apellido TEXT NOT NULL DEFAULT ''")
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE $TABLE_USERS ADD COLUMN password TEXT NOT NULL DEFAULT ''")
+        }
+    }
 
     fun autenticar(correo: String, password: String): Usuario? {
         val correoNormalizado = correo.trim().lowercase(Locale.ROOT)
+        val usuario: Usuario
+        val passwordGuardada: String
+        val saltGuardada: String
+        val hashGuardado: String
         readableDatabase.query(
             TABLE_USERS,
-            arrayOf("id", "correo", "nombre", "perfil", "taller_asignado", "password_salt", "password_hash"),
+            arrayOf("id", "correo", "nombre", "apellido", "perfil", "taller_asignado", "password", "password_salt", "password_hash"),
             "correo = ?",
             arrayOf(correoNormalizado),
             null,
@@ -62,18 +76,53 @@ class UsuarioDatabaseHelper(context: Context) :
         ).use { cursor ->
             if (!cursor.moveToFirst()) return null
 
-            val salt = decode(cursor.getString(5))
-            val expectedHash = decode(cursor.getString(6))
-            if (!PasswordHasher.verify(password, salt, expectedHash)) return null
-
-            return Usuario(
+            usuario = Usuario(
                 id = cursor.getString(0),
                 correo = cursor.getString(1),
                 nombre = cursor.getString(2),
-                perfil = cursor.getString(3),
-                tallerAsignado = cursor.getString(4)
+                apellido = cursor.getString(3),
+                perfil = cursor.getString(4),
+                tallerAsignado = cursor.getString(5)
             )
+            passwordGuardada = cursor.getString(6)
+            saltGuardada = cursor.getString(7)
+            hashGuardado = cursor.getString(8)
         }
+
+        if (passwordGuardada.isNotEmpty()) {
+            return usuario.takeIf { password == passwordGuardada }
+        }
+
+        if (!PasswordHasher.verify(password, decode(saltGuardada), decode(hashGuardado))) {
+            return null
+        }
+
+        writableDatabase.update(
+            TABLE_USERS,
+            ContentValues().apply {
+                put("password", password)
+                put("password_salt", "")
+                put("password_hash", "")
+            },
+            "id = ?",
+            arrayOf(usuario.id)
+        )
+        return usuario
+    }
+
+    fun registrar(nombre: String, apellido: String, correo: String, password: String) {
+        val values = ContentValues().apply {
+            put("id", java.util.UUID.randomUUID().toString())
+            put("correo", correo.trim().lowercase(Locale.ROOT))
+            put("nombre", nombre.trim())
+            put("apellido", apellido.trim())
+            put("perfil", "estudiante")
+            put("taller_asignado", "General")
+            put("password", password)
+            put("password_salt", "")
+            put("password_hash", "")
+        }
+        writableDatabase.insertOrThrow(TABLE_USERS, null, values)
     }
 
     private fun decode(value: String): ByteArray = Base64.decode(value, Base64.NO_WRAP)
@@ -90,7 +139,7 @@ class UsuarioDatabaseHelper(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "huerto_lindo.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 3
         const val TABLE_USERS = "usuarios"
 
         val INITIAL_USERS = listOf(

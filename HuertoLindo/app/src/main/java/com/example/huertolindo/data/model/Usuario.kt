@@ -4,5 +4,9 @@ data class Usuario(
     val nombre: String,
     val correo: String,
     val perfil: String,
-    val tallerAsignado: String
-)
+    val tallerAsignado: String,
+    val apellido: String = ""
+) {
+    val nombreCompleto: String
+        get() = listOf(nombre, apellido).filter(String::isNotBlank).joinToString(" ")
+}

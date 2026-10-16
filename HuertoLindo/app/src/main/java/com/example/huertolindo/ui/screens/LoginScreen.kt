@@ -12,7 +12,12 @@ import androidx.compose.ui.unit.dp
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
 @Composable
-fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
+fun LoginScreen(
+    viewModel: HuertoViewModel,
+    onLoginSuccess: (String) -> Unit,
+    onRegisterClick: () -> Unit,
+    mensajeInformativo: String? = null
+) {
     var correo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var mensajeError by remember { mutableStateOf<String?>(null) }
@@ -32,6 +37,15 @@ fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        mensajeInformativo?.let { mensaje ->
+            Text(
+                text = mensaje,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         OutlinedTextField(
             value = correo,
@@ -104,6 +118,13 @@ fun LoginScreen(viewModel: HuertoViewModel, onLoginSuccess: (String) -> Unit) {
             } else {
                 Text("Iniciar sesión")
             }
+        }
+
+        TextButton(
+            onClick = onRegisterClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Registrarse")
         }
     }
 }

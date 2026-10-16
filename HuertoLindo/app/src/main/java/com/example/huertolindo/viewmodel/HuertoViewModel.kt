@@ -1,6 +1,7 @@
 package com.example.huertolindo.viewmodel
 
 import android.app.Application
+import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteException
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
@@ -67,8 +68,37 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun registrarUsuario(
+        nombre: String,
+        apellido: String,
+        correo: String,
+        password: String,
+        onResult: (ResultadoRegistro) -> Unit
+    ) {
+        viewModelScope.launch {
+            val resultado = try {
+                withContext(Dispatchers.IO) {
+                    usuarioDatabase.registrar(nombre, apellido, correo, password)
+                }
+                ResultadoRegistro.Exito
+            } catch (exception: SQLiteConstraintException) {
+                ResultadoRegistro.CorreoYaRegistrado
+            } catch (exception: SQLiteException) {
+                ResultadoRegistro.ErrorDeBaseDeDatos
+            } catch (exception: java.security.GeneralSecurityException) {
+                ResultadoRegistro.ErrorDeBaseDeDatos
+            }
+            onResult(resultado)
+        }
+    }
+
     fun actualizarFotoPerfil(uri: Uri?) {
         fotoPerfilUri = uri
+    }
+
+    fun cerrarSesion() {
+        usuarioActual = null
+        fotoPerfilUri = null
     }
 
     override fun onCleared() {
@@ -80,5 +110,11 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         data class Exito(val usuario: Usuario) : ResultadoInicioSesion
         data object CredencialesInvalidas : ResultadoInicioSesion
         data object ErrorDeBaseDeDatos : ResultadoInicioSesion
+    }
+
+    sealed interface ResultadoRegistro {
+        data object Exito : ResultadoRegistro
+        data object CorreoYaRegistrado : ResultadoRegistro
+        data object ErrorDeBaseDeDatos : ResultadoRegistro
     }
 }
