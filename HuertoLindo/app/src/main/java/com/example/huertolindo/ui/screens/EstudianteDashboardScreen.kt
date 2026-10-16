@@ -36,6 +36,7 @@ fun EstudianteDashboardScreen(
     ) {
         FilledTonalButton(onClick = onProfileClick) { Text("Mi perfil") }
         Text("Mi huerto", style = MaterialTheme.typography.headlineMedium)
+        Text("Rol asignado: Estudiante", style = MaterialTheme.typography.labelLarge)
         Text(
             "Hola, ${viewModel.usuarioActual?.nombre ?: "Estudiante"}",
             style = MaterialTheme.typography.titleLarge

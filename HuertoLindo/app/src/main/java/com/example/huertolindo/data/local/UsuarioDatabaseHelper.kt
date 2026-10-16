@@ -110,6 +110,32 @@ class UsuarioDatabaseHelper(context: Context) :
         return usuario
     }
 
+    fun obtenerUsuarios(): List<Usuario> =
+        readableDatabase.query(
+            TABLE_USERS,
+            arrayOf("id", "correo", "nombre", "apellido", "perfil", "taller_asignado"),
+            null,
+            null,
+            null,
+            null,
+            "nombre COLLATE NOCASE"
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        Usuario(
+                            id = cursor.getString(0),
+                            correo = cursor.getString(1),
+                            nombre = cursor.getString(2),
+                            apellido = cursor.getString(3),
+                            perfil = cursor.getString(4),
+                            tallerAsignado = cursor.getString(5)
+                        )
+                    )
+                }
+            }
+        }
+
     fun registrar(nombre: String, apellido: String, correo: String, password: String) {
         val values = ContentValues().apply {
             put("id", java.util.UUID.randomUUID().toString())

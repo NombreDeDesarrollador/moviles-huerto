@@ -8,6 +8,8 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -57,6 +59,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onLoginSuccess = { perfilSeleccionado ->
                                     perfilActual = perfilSeleccionado
+                                    if (perfilSeleccionado == "administrador") {
+                                        huertoViewModel.cargarUsuariosDisponibles()
+                                    }
                                     pantallaActual = "menu"
                                 }
                             )
@@ -107,6 +112,7 @@ class MainActivity : ComponentActivity() {
                         }
                         "sectores" -> SectoresScreen(
                             viewModel = huertoViewModel,
+                            esAdministrador = perfilActual == "administrador",
                             onBack = { pantallaActual = "menu" },
                             onSectorClick = {
                                 sectorSeleccionado = it
@@ -116,6 +122,7 @@ class MainActivity : ComponentActivity() {
                         "detalleSector" -> DetalleSectorScreen(
                             viewModel = huertoViewModel,
                             sectorId = sectorSeleccionado,
+                            esAdministrador = perfilActual == "administrador",
                             onBack = { pantallaActual = "sectores" },
                             onCultivoClick = {
                                 cultivoSeleccionado = it
@@ -129,16 +136,25 @@ class MainActivity : ComponentActivity() {
                         )
                         "tareas" -> TareasScreen(
                             viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
+                            onBack = { pantallaActual = "menu" },
+                            esAdministrador = perfilActual == "administrador"
                         )
                         "sensores" -> SensoresScreen(
                             viewModel = huertoViewModel,
                             onBack = { pantallaActual = "menu" }
                         )
-                        "reportes" -> ReportesScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
+                        "reportes" -> {
+                            if (perfilActual == "administrador") {
+                                ReportesScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                            } else {
+                                TextButton(onClick = { pantallaActual = "menu" }) {
+                                    Text("Acceso no autorizado · Volver")
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -40,6 +40,7 @@ fun AdminDashboardScreen(
     ) {
         FilledTonalButton(onClick = onProfileClick) { Text("Mi perfil") }
         Text("Panel de administración", style = MaterialTheme.typography.headlineMedium)
+        Text("Rol asignado: Administrador", style = MaterialTheme.typography.labelLarge)
         Text(
             "Hola, ${viewModel.usuarioActual?.nombre ?: "Administrador"}",
             style = MaterialTheme.typography.titleLarge

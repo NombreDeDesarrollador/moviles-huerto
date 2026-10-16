@@ -33,6 +33,12 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     var listaTareas = mutableStateOf(listOf<Tarea>())
         private set
 
+    var usuariosDisponibles = mutableStateOf(listOf<Usuario>())
+        private set
+
+    var errorCargaUsuarios by mutableStateOf<String?>(null)
+        private set
+
     init {
         cargarDatosFicticios()
     }
@@ -50,18 +56,116 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         )
 
         listaTareas.value = listOf(
-            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "estudiante1", estado = "Pendiente"),
-            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "estudiante2", estado = "Pendiente")
+            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "student-vicente", estado = "Pendiente"),
+            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "student-matias", estado = "Pendiente")
         )
     }
 
-    fun cambiarEstadoTarea(tareaId: String) {
-        listaTareas.value = listaTareas.value.map { tarea ->
-            if (tarea.id == tareaId) {
-                tarea.copy(estado = if (tarea.estado == "Completada") "Pendiente" else "Completada")
-            } else {
-                tarea
+    fun enviarTareaARevision(tareaId: String): Boolean {
+        val usuario = usuarioActual ?: return false
+        val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
+        if (usuario.perfil != "estudiante" || tarea.asignadoA != usuario.id || tarea.estado != "Pendiente") {
+            return false
+        }
+        actualizarEstadoTarea(tareaId, "Por validar")
+        return true
+    }
+
+    fun validarTarea(tareaId: String): Boolean {
+        if (usuarioActual?.perfil != "administrador") return false
+        val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
+        if (tarea.estado != "Por validar") return false
+        actualizarEstadoTarea(tareaId, "Completada")
+        return true
+    }
+
+    fun crearTarea(titulo: String, descripcion: String, sectorId: String, usuarioId: String): Boolean {
+        if (usuarioActual?.perfil != "administrador" ||
+            titulo.isBlank() || descripcion.isBlank() ||
+            listaSectores.value.none { it.id == sectorId } ||
+            usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
+        ) return false
+
+        listaTareas.value = listaTareas.value + Tarea(
+            id = java.util.UUID.randomUUID().toString(),
+            titulo = titulo.trim(),
+            descripcion = descripcion.trim(),
+            sectorId = sectorId,
+            asignadoA = usuarioId,
+            estado = "Pendiente"
+        )
+        return true
+    }
+
+    fun agregarSector(nombre: String, descripcion: String): Boolean {
+        if (usuarioActual?.perfil != "administrador" || nombre.isBlank() || descripcion.isBlank()) return false
+        listaSectores.value = listaSectores.value + Sector(
+            id = java.util.UUID.randomUUID().toString(),
+            nombre = nombre.trim(),
+            descripcion = descripcion.trim(),
+            estado = "Disponible"
+        )
+        return true
+    }
+
+    fun eliminarSector(sectorId: String): Boolean {
+        if (usuarioActual?.perfil != "administrador" ||
+            listaCultivos.value.any { it.sectorId == sectorId } ||
+            listaTareas.value.any { it.sectorId == sectorId }
+        ) return false
+        val sectoresActualizados = listaSectores.value.filterNot { it.id == sectorId }
+        if (sectoresActualizados.size == listaSectores.value.size) return false
+        listaSectores.value = sectoresActualizados
+        return true
+    }
+
+    fun agregarCultivo(
+        nombre: String,
+        sectorId: String,
+        fechaSiembra: String,
+        frecuenciaRiego: String
+    ): Boolean {
+        if (usuarioActual?.perfil != "administrador" || nombre.isBlank() ||
+            fechaSiembra.isBlank() || frecuenciaRiego.isBlank() ||
+            listaSectores.value.none { it.id == sectorId }
+        ) return false
+
+        listaCultivos.value = listaCultivos.value + Cultivo(
+            id = java.util.UUID.randomUUID().toString(),
+            nombreComun = nombre.trim(),
+            sectorId = sectorId,
+            fechaSiembra = fechaSiembra.trim(),
+            estadoDesarrollo = "En crecimiento",
+            frecuenciaRiego = frecuenciaRiego.trim()
+        )
+        return true
+    }
+
+    fun eliminarCultivo(cultivoId: String): Boolean {
+        if (usuarioActual?.perfil != "administrador") return false
+        val cultivosActualizados = listaCultivos.value.filterNot { it.id == cultivoId }
+        if (cultivosActualizados.size == listaCultivos.value.size) return false
+        listaCultivos.value = cultivosActualizados
+        return true
+    }
+
+    fun cargarUsuariosDisponibles() {
+        if (usuarioActual?.perfil != "administrador") return
+        viewModelScope.launch {
+            try {
+                usuariosDisponibles.value = withContext(Dispatchers.IO) {
+                    usuarioDatabase.obtenerUsuarios()
+                }
+                errorCargaUsuarios = null
+            } catch (exception: SQLiteException) {
+                errorCargaUsuarios = "No se pudieron cargar los estudiantes desde la base de datos."
             }
+        }
+    }
+
+    private fun actualizarEstadoTarea(tareaId: String, estado: String) {
+        listaTareas.value = listaTareas.value.map { tarea ->
+            if (tarea.id == tareaId) tarea.copy(estado = estado) else tarea
         }
     }
 
