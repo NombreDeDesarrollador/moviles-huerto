@@ -43,12 +43,23 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var pantallaActual by remember { mutableStateOf("login") }
-                    var perfilActual by remember { mutableStateOf("estudiante") }
                     var mensajeRegistro by remember { mutableStateOf<String?>(null) }
                     var sectorSeleccionado by remember { mutableStateOf("") }
                     var cultivoSeleccionado by remember { mutableStateOf("") }
 
-                    when (pantallaActual) {
+                    when {
+                        pantallaActual !in setOf("login", "registro") &&
+                            huertoViewModel.usuarioActual == null -> {
+                            TextButton(onClick = { pantallaActual = "login" }) {
+                                Text("Sesión no iniciada · Volver al inicio")
+                            }
+                        }
+                        pantallaActual == "reportes" && !huertoViewModel.esAdministrador -> {
+                            TextButton(onClick = { pantallaActual = "menu" }) {
+                                Text("Acceso no autorizado · Volver")
+                            }
+                        }
+                        else -> when (pantallaActual) {
                         "login" -> {
                             LoginScreen(
                                 viewModel = huertoViewModel,
@@ -57,9 +68,8 @@ class MainActivity : ComponentActivity() {
                                     mensajeRegistro = null
                                     pantallaActual = "registro"
                                 },
-                                onLoginSuccess = { perfilSeleccionado ->
-                                    perfilActual = perfilSeleccionado
-                                    if (perfilSeleccionado == "administrador") {
+                                onLoginSuccess = {
+                                    if (huertoViewModel.esAdministrador) {
                                         huertoViewModel.cargarUsuariosDisponibles()
                                     }
                                     pantallaActual = "menu"
@@ -77,7 +87,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         "menu" -> {
-                            if (perfilActual == "administrador") {
+                            if (huertoViewModel.esAdministrador) {
                                 AdminDashboardScreen(
                                     viewModel = huertoViewModel,
                                     onProfileClick = { pantallaActual = "perfil" },
@@ -104,7 +114,6 @@ class MainActivity : ComponentActivity() {
                                 onVolver = { pantallaActual = "menu" },
                                 onCerrarSesion = {
                                     huertoViewModel.cerrarSesion()
-                                    perfilActual = "estudiante"
                                     mensajeRegistro = null
                                     pantallaActual = "login"
                                 }
@@ -112,7 +121,6 @@ class MainActivity : ComponentActivity() {
                         }
                         "sectores" -> SectoresScreen(
                             viewModel = huertoViewModel,
-                            esAdministrador = perfilActual == "administrador",
                             onBack = { pantallaActual = "menu" },
                             onSectorClick = {
                                 sectorSeleccionado = it
@@ -122,7 +130,6 @@ class MainActivity : ComponentActivity() {
                         "detalleSector" -> DetalleSectorScreen(
                             viewModel = huertoViewModel,
                             sectorId = sectorSeleccionado,
-                            esAdministrador = perfilActual == "administrador",
                             onBack = { pantallaActual = "sectores" },
                             onCultivoClick = {
                                 cultivoSeleccionado = it
@@ -136,25 +143,19 @@ class MainActivity : ComponentActivity() {
                         )
                         "tareas" -> TareasScreen(
                             viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" },
-                            esAdministrador = perfilActual == "administrador"
+                            onBack = { pantallaActual = "menu" }
                         )
                         "sensores" -> SensoresScreen(
                             viewModel = huertoViewModel,
                             onBack = { pantallaActual = "menu" }
                         )
                         "reportes" -> {
-                            if (perfilActual == "administrador") {
-                                ReportesScreen(
-                                    viewModel = huertoViewModel,
-                                    onBack = { pantallaActual = "menu" }
-                                )
-                            } else {
-                                TextButton(onClick = { pantallaActual = "menu" }) {
-                                    Text("Acceso no autorizado · Volver")
-                                }
-                            }
+                            ReportesScreen(
+                                viewModel = huertoViewModel,
+                                onBack = { pantallaActual = "menu" }
+                            )
                         }
+                    }
                     }
                 }
             }

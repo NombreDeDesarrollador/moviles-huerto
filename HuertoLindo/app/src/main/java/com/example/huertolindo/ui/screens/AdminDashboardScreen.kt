@@ -47,7 +47,7 @@ fun AdminDashboardScreen(
         )
         Text(
             "${viewModel.listaSectores.value.size} sectores · ${viewModel.listaCultivos.value.size} cultivos · " +
-                "${viewModel.listaTareas.value.count { it.estado != "Completada" }} tareas pendientes",
+                "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas pendientes",
             style = MaterialTheme.typography.bodyLarge
         )
         DashboardAction("Sectores y cultivos", "Consultar los espacios de cultivo y su estado.", onSectorsClick)

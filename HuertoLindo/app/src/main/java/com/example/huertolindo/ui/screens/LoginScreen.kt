@@ -14,7 +14,7 @@ import com.example.huertolindo.viewmodel.HuertoViewModel
 @Composable
 fun LoginScreen(
     viewModel: HuertoViewModel,
-    onLoginSuccess: (String) -> Unit,
+    onLoginSuccess: () -> Unit,
     onRegisterClick: () -> Unit,
     mensajeInformativo: String? = null
 ) {
@@ -98,7 +98,7 @@ fun LoginScreen(
                         cargando = false
                         when (resultado) {
                             is HuertoViewModel.ResultadoInicioSesion.Exito ->
-                                onLoginSuccess(resultado.usuario.perfil)
+                                onLoginSuccess()
                             HuertoViewModel.ResultadoInicioSesion.CredencialesInvalidas ->
                                 mensajeError = "El correo o la contraseña no son correctos."
                             HuertoViewModel.ResultadoInicioSesion.ErrorDeBaseDeDatos ->

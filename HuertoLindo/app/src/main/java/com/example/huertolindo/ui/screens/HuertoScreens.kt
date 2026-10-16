@@ -36,9 +36,9 @@ import com.example.huertolindo.viewmodel.HuertoViewModel
 fun SectoresScreen(
     viewModel: HuertoViewModel,
     onBack: () -> Unit,
-    onSectorClick: (String) -> Unit,
-    esAdministrador: Boolean = false
+    onSectorClick: (String) -> Unit
 ) {
+    val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     ScreenLayout("Sectores del huerto", onBack) {
@@ -89,9 +89,9 @@ fun DetalleSectorScreen(
     viewModel: HuertoViewModel,
     sectorId: String,
     onBack: () -> Unit,
-    onCultivoClick: (String) -> Unit,
-    esAdministrador: Boolean = false
+    onCultivoClick: (String) -> Unit
 ) {
+    val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val sector = viewModel.listaSectores.value.firstOrNull { it.id == sectorId }
@@ -161,17 +161,12 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
 @Composable
 fun TareasScreen(
     viewModel: HuertoViewModel,
-    onBack: () -> Unit,
-    esAdministrador: Boolean = false
+    onBack: () -> Unit
 ) {
+    val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val usuarioActual = viewModel.usuarioActual
-    val tareas = if (esAdministrador) {
-        viewModel.listaTareas.value
-    } else {
-        viewModel.listaTareas.value.filter { it.asignadoA == usuarioActual?.id }
-    }
+    val tareas = viewModel.tareasVisibles
     ScreenLayout("Tareas del huerto", onBack) {
         if (esAdministrador) {
             Button(onClick = { mostrarFormulario = true }) { Text("Crear y asignar tarea") }
@@ -248,16 +243,20 @@ fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
 @Composable
 fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
-    val tareas = viewModel.listaTareas.value
+    val tareas = viewModel.tareasVisibles
     ScreenLayout("Resumen del huerto", onBack) {
-        ReporteDato("Sectores", viewModel.listaSectores.value.size.toString())
-        ReporteDato("Cultivos activos", viewModel.listaCultivos.value.size.toString())
-        ReporteDato("Tareas completadas", tareas.count { it.estado == "Completada" }.toString())
-        ReporteDato("Tareas pendientes", tareas.count { it.estado != "Completada" }.toString())
-        Text(
-            "Este resumen se actualiza al cambiar el estado de las tareas.",
-            style = MaterialTheme.typography.bodyMedium
-        )
+        if (!viewModel.esAdministrador) {
+            Text("No tienes permiso para consultar este resumen.")
+        } else {
+            ReporteDato("Sectores", viewModel.listaSectores.value.size.toString())
+            ReporteDato("Cultivos activos", viewModel.listaCultivos.value.size.toString())
+            ReporteDato("Tareas completadas", tareas.count { it.estado == "Completada" }.toString())
+            ReporteDato("Tareas pendientes", tareas.count { it.estado != "Completada" }.toString())
+            Text(
+                "Este resumen se actualiza al cambiar el estado de las tareas.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }
 

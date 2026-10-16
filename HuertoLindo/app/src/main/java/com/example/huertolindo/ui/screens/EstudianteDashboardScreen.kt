@@ -42,11 +42,11 @@ fun EstudianteDashboardScreen(
             style = MaterialTheme.typography.titleLarge
         )
         Text(
-            "Tienes ${viewModel.listaTareas.value.count { it.estado != "Completada" }} tareas por realizar.",
+            "Tienes ${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas asignadas por realizar.",
             style = MaterialTheme.typography.bodyLarge
         )
         DashboardAction("Explorar sectores", "Consulta cultivos y detalles de cada sector.", onSectorsClick)
-        DashboardAction("Mis tareas", "Marca como completadas las labores que termines.", onTasksClick)
+        DashboardAction("Mis tareas", "Envía a revisión las labores que termines.", onTasksClick)
         DashboardAction("Sensores", "Revisa las condiciones simuladas del huerto.", onSensorsClick)
         Spacer(Modifier.padding(bottom = 8.dp))
     }

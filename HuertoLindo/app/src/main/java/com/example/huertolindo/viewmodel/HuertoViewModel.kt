@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.example.huertolindo.data.local.UsuarioDatabaseHelper
 import com.example.huertolindo.data.model.*
+import com.example.huertolindo.data.security.PermisosHuerto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,8 +31,17 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     var listaCultivos = mutableStateOf(listOf<Cultivo>())
         private set
 
-    var listaTareas = mutableStateOf(listOf<Tarea>())
-        private set
+    private var listaTareas = mutableStateOf(listOf<Tarea>())
+
+    val esAdministrador: Boolean
+        get() = PermisosHuerto.esAdministrador(usuarioActual?.perfil)
+
+    val tareasVisibles: List<Tarea>
+        get() = PermisosHuerto.tareasVisibles(
+            usuarioActual?.perfil,
+            usuarioActual?.id,
+            listaTareas.value
+        )
 
     var usuariosDisponibles = mutableStateOf(listOf<Usuario>())
         private set
@@ -64,7 +74,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun enviarTareaARevision(tareaId: String): Boolean {
         val usuario = usuarioActual ?: return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
-        if (usuario.perfil != "estudiante" || tarea.asignadoA != usuario.id || tarea.estado != "Pendiente") {
+        if (!PermisosHuerto.puedeEnviarTarea(usuario.perfil, usuario.id, tarea)) {
             return false
         }
         actualizarEstadoTarea(tareaId, "Por validar")
@@ -72,7 +82,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun validarTarea(tareaId: String): Boolean {
-        if (usuarioActual?.perfil != "administrador") return false
+        if (!esAdministrador) return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         if (tarea.estado != "Por validar") return false
         actualizarEstadoTarea(tareaId, "Completada")
@@ -80,7 +90,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun crearTarea(titulo: String, descripcion: String, sectorId: String, usuarioId: String): Boolean {
-        if (usuarioActual?.perfil != "administrador" ||
+        if (!esAdministrador ||
             titulo.isBlank() || descripcion.isBlank() ||
             listaSectores.value.none { it.id == sectorId } ||
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
@@ -98,7 +108,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun agregarSector(nombre: String, descripcion: String): Boolean {
-        if (usuarioActual?.perfil != "administrador" || nombre.isBlank() || descripcion.isBlank()) return false
+        if (!esAdministrador || nombre.isBlank() || descripcion.isBlank()) return false
         listaSectores.value = listaSectores.value + Sector(
             id = java.util.UUID.randomUUID().toString(),
             nombre = nombre.trim(),
@@ -109,7 +119,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun eliminarSector(sectorId: String): Boolean {
-        if (usuarioActual?.perfil != "administrador" ||
+        if (!esAdministrador ||
             listaCultivos.value.any { it.sectorId == sectorId } ||
             listaTareas.value.any { it.sectorId == sectorId }
         ) return false
@@ -125,7 +135,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         fechaSiembra: String,
         frecuenciaRiego: String
     ): Boolean {
-        if (usuarioActual?.perfil != "administrador" || nombre.isBlank() ||
+        if (!esAdministrador || nombre.isBlank() ||
             fechaSiembra.isBlank() || frecuenciaRiego.isBlank() ||
             listaSectores.value.none { it.id == sectorId }
         ) return false
@@ -142,7 +152,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun eliminarCultivo(cultivoId: String): Boolean {
-        if (usuarioActual?.perfil != "administrador") return false
+        if (!esAdministrador) return false
         val cultivosActualizados = listaCultivos.value.filterNot { it.id == cultivoId }
         if (cultivosActualizados.size == listaCultivos.value.size) return false
         listaCultivos.value = cultivosActualizados
@@ -150,7 +160,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun cargarUsuariosDisponibles() {
-        if (usuarioActual?.perfil != "administrador") return
+        if (!esAdministrador) return
         viewModelScope.launch {
             try {
                 usuariosDisponibles.value = withContext(Dispatchers.IO) {
@@ -223,6 +233,8 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun cerrarSesion() {
         usuarioActual = null
         fotoPerfilUri = null
+        usuariosDisponibles.value = emptyList()
+        errorCargaUsuarios = null
     }
 
     override fun onCleared() {
