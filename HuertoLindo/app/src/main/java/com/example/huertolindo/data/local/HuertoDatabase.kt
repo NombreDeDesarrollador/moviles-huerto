@@ -130,6 +130,9 @@ interface EvidenciaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(evidencia: Evidencia)
+
+    @androidx.room.Delete
+    suspend fun eliminar(evidencia: Evidencia)
 }
 
 @Dao
@@ -179,7 +182,7 @@ interface ReporteProblemaDao {
         ReporteProblema::class,
         ActividadTarea::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {
@@ -266,6 +269,41 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE evidencias_nueva (
+                id TEXT NOT NULL PRIMARY KEY,
+                tarea_id TEXT,
+                cultivo_id TEXT,
+                reporte_id TEXT,
+                tipo TEXT NOT NULL,
+                ruta_archivo TEXT NOT NULL,
+                descripcion TEXT NOT NULL,
+                fecha_registro TEXT NOT NULL,
+                FOREIGN KEY(tarea_id) REFERENCES tareas(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(cultivo_id) REFERENCES cultivos(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(reporte_id) REFERENCES reporte_problemas(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO evidencias_nueva
+                (id, tarea_id, tipo, ruta_archivo, descripcion, fecha_registro)
+            SELECT id, tarea_id, tipo, ruta_archivo, descripcion, fecha_registro
+            FROM evidencias
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE evidencias")
+        db.execSQL("ALTER TABLE evidencias_nueva RENAME TO evidencias")
+        db.execSQL("CREATE INDEX index_evidencias_tarea_id ON evidencias(tarea_id)")
+        db.execSQL("CREATE INDEX index_evidencias_cultivo_id ON evidencias(cultivo_id)")
+        db.execSQL("CREATE INDEX index_evidencias_reporte_id ON evidencias(reporte_id)")
+    }
+}
+
 object HuertoDatabaseProvider {
     @Volatile
     private var INSTANCE: HuertoDatabase? = null
@@ -277,7 +315,7 @@ object HuertoDatabaseProvider {
                 HuertoDatabase::class.java,
                 "huerto_lindo_room.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
             INSTANCE = instance
             instance

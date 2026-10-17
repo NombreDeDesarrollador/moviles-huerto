@@ -217,8 +217,12 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         _evidenciasTareas.value = snapshot.evidencias.filter { File(it.rutaArchivo).isFile }
         _validacionesTareas.value = snapshot.validaciones
         _comentariosEntrega.value = evidenciasTareas.value
+            .filter { !it.tareaId.isNullOrBlank() && it.descripcion.isNotBlank() }
             .groupBy { it.tareaId }
-            .mapValues { (_, evidencias) -> evidencias.first().descripcion }
+            .mapNotNull { (tareaId, evidencias) ->
+                tareaId?.let { it to evidencias.first().descripcion }
+            }
+            .toMap()
         _reportesProblemas.value = snapshot.reportesProblemas
         _historialActividades.value = snapshot.actividades
     }
@@ -310,6 +314,128 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun evidenciasDeTarea(tareaId: String): List<Evidencia> =
         evidenciasTareas.value.filter { it.tareaId == tareaId }
+
+    fun evidenciasDeCultivo(cultivoId: String): List<Evidencia> =
+        evidenciasTareas.value.filter { it.cultivoId == cultivoId }
+
+    fun evidenciasDeReporte(reporteId: String): List<Evidencia> =
+        evidenciasTareas.value.filter { it.reporteId == reporteId }
+
+    fun agregarEvidencia(
+        tipoAsociacion: TipoAsociacionEvidencia,
+        entidadId: String,
+        imagenUri: Uri,
+        onResult: (String?) -> Unit
+    ) {
+        val usuario = usuarioActual
+        if (usuario == null) {
+            onResult("Inicia sesión para guardar fotografías.")
+            return
+        }
+        val destinoDisponible = when (tipoAsociacion) {
+            TipoAsociacionEvidencia.TAREA -> {
+                val tarea = listaTareas.value.firstOrNull { it.id == entidadId }
+                tarea != null && (
+                    esAdministrador ||
+                        (tarea.asignadoA == usuario.id &&
+                            tarea.estado in setOf("En desarrollo", "Rechazada"))
+                    )
+            }
+            TipoAsociacionEvidencia.CULTIVO ->
+                listaCultivos.value.any { it.id == entidadId }
+            TipoAsociacionEvidencia.REPORTE -> {
+                val reporte = reportesProblemas.value.firstOrNull { it.id == entidadId }
+                reporte != null && (esAdministrador || reporte.usuarioId == usuario.id)
+            }
+        }
+        if (!destinoDisponible) {
+            onResult("No tienes permiso para adjuntar fotografías a este registro.")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val evidencia = withContext(Dispatchers.IO) {
+                    huertoRepository.guardarEvidenciaAsociada(
+                        tipoAsociacion,
+                        entidadId,
+                        imagenUri
+                    )
+                }
+                _evidenciasTareas.value = evidenciasTareas.value + evidencia
+                onResult(null)
+            } catch (exception: IOException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo guardar la fotografía.", exception)
+                onResult("No se pudo guardar la fotografía. Inténtalo nuevamente.")
+            } catch (exception: SecurityException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo leer la fotografía seleccionada.", exception)
+                onResult("No se pudo acceder a la fotografía seleccionada.")
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo asociar la fotografía al registro.", exception)
+                onResult("No se pudo guardar la fotografía en el registro.")
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "La base local no pudo guardar la fotografía.", exception)
+                onResult("No se pudo guardar la fotografía. Inténtalo nuevamente.")
+            }
+        }
+    }
+
+    fun eliminarEvidencia(evidenciaId: String, onResult: (String?) -> Unit) {
+        val usuario = usuarioActual
+        val evidencia = evidenciasTareas.value.firstOrNull { it.id == evidenciaId }
+        if (usuario == null || evidencia == null) {
+            onResult("La fotografía ya no está disponible.")
+            return
+        }
+        val puedeEliminar = when {
+            evidencia.tareaId != null -> {
+                val tarea = listaTareas.value.firstOrNull { it.id == evidencia.tareaId }
+                tarea != null && (esAdministrador || tarea.asignadoA == usuario.id)
+            }
+            evidencia.cultivoId != null ->
+                listaCultivos.value.any { it.id == evidencia.cultivoId }
+            evidencia.reporteId != null -> {
+                val reporte = reportesProblemas.value.firstOrNull { it.id == evidencia.reporteId }
+                reporte != null && (esAdministrador || reporte.usuarioId == usuario.id)
+            }
+            else -> false
+        }
+        if (!puedeEliminar) {
+            onResult("No tienes permiso para quitar esta fotografía.")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    huertoRepository.eliminarEvidencia(evidencia)
+                }
+                _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidenciaId }
+                if (evidencia.tareaId != null) {
+                    _comentariosEntrega.value = evidenciasTareas.value
+                        .filter { it.tareaId == evidencia.tareaId && it.descripcion.isNotBlank() }
+                        .groupBy { it.tareaId }
+                        .mapNotNull { (tareaId, evidencias) ->
+                            tareaId?.let { it to evidencias.first().descripcion }
+                        }
+                        .toMap()
+                }
+                onResult(null)
+            } catch (exception: IOException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo eliminar el archivo de evidencia.", exception)
+                onResult("No se pudo quitar la fotografía. Inténtalo nuevamente.")
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo eliminar la evidencia de Room.", exception)
+                onResult("No se pudo quitar la fotografía de la base de datos.")
+            } catch (exception: SecurityException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo acceder al archivo de evidencia.", exception)
+                onResult("No se pudo quitar la fotografía por permisos de almacenamiento.")
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "La base local no pudo eliminar la evidencia.", exception)
+                onResult("No se pudo quitar la fotografía. Inténtalo nuevamente.")
+            }
+        }
+    }
 
     fun iniciarTarea(tareaId: String): Boolean {
         val usuario = usuarioActual ?: return false

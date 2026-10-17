@@ -1,6 +1,7 @@
 package com.example.huertolindo.ui.screens
 
 import android.net.Uri
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,10 +38,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.huertolindo.ui.crearUriFotografia
+import com.example.huertolindo.ui.eliminarFotografiaTemporal
 import com.example.huertolindo.data.model.SensorSimulado
 import com.example.huertolindo.data.model.Cultivo
 import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
+import com.example.huertolindo.data.model.TipoAsociacionEvidencia
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.viewmodel.HuertoViewModel
 import com.example.huertolindo.viewmodel.HuertoUiState
@@ -211,6 +214,21 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
         Text("Fecha de siembra: ${cultivo.fechaSiembra}")
         Text("Estado de desarrollo: ${cultivo.estadoDesarrollo}")
         Text("Frecuencia de riego: ${cultivo.frecuenciaRiego}")
+        EvidenciaFotograficaSection(
+            titulo = "Registro fotográfico del cultivo",
+            evidencias = viewModel.evidenciasDeCultivo(cultivo.id),
+            onAgregarFoto = { uri, onResult ->
+                viewModel.agregarEvidencia(
+                    TipoAsociacionEvidencia.CULTIVO,
+                    cultivo.id,
+                    uri,
+                    onResult
+                )
+            },
+            onEliminarFoto = { evidencia, onResult ->
+                viewModel.eliminarEvidencia(evidencia.id, onResult)
+            }
+        )
     }
 }
 
@@ -451,14 +469,19 @@ fun DetalleTareaScreen(
     val context = LocalContext.current
     val selectorEvidencia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
         if (uri != null) {
+            imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
             imagenEntrega = uri
             errorEntrega = null
         }
     }
     val camaraEvidencia = rememberLauncherForActivityResult(TakePicture()) { capturada ->
-        if (capturada) {
-            imagenEntrega = uriCamaraPendiente
+        val uri = uriCamaraPendiente
+        if (capturada && uri != null) {
+            imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
+            imagenEntrega = uri
             errorEntrega = null
+        } else if (uri != null) {
+            eliminarFotografiaTemporal(context, uri)
         }
         uriCamaraPendiente = null
     }
@@ -486,22 +509,28 @@ fun DetalleTareaScreen(
         )
         Text("Sector: ${sector?.nombre ?: "No asignado"}")
         Text("Asignada a: ${estudiante?.nombreCompleto ?: tarea.asignadoA}")
-        if (evidencias.isNotEmpty()) {
+        if (evidencias.any { it.descripcion.isNotBlank() }) {
             Text("Comentario de entrega", style = MaterialTheme.typography.titleMedium)
             Text(uiState.comentariosEntrega[tarea.id].orEmpty())
-            Text("Evidencias", style = MaterialTheme.typography.titleMedium)
-            evidencias.forEach { evidencia ->
-                AsyncImage(
-                    model = Uri.fromFile(java.io.File(evidencia.rutaArchivo)),
-                    contentDescription = "Evidencia fotográfica de ${tarea.titulo}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    contentScale = ContentScale.Crop
-                )
-                Text("Adjuntada: ${evidencia.fechaRegistro}")
-            }
         }
+        EvidenciaFotograficaSection(
+            titulo = "Registro fotográfico de la tarea",
+            evidencias = evidencias,
+            editable = viewModel.esAdministrador ||
+                (tarea.asignadoA == uiState.usuarioActual?.id &&
+                    tarea.estado in setOf("En desarrollo", "Rechazada")),
+            onAgregarFoto = { uri, onResult ->
+                viewModel.agregarEvidencia(
+                    TipoAsociacionEvidencia.TAREA,
+                    tarea.id,
+                    uri,
+                    onResult
+                )
+            },
+            onEliminarFoto = { evidencia, onResult ->
+                viewModel.eliminarEvidencia(evidencia.id, onResult)
+            }
+        )
         val validaciones = uiState.validaciones.filter { it.tareaId == tarea.id }
         if (validaciones.isNotEmpty()) {
             Text("Historial de validación", style = MaterialTheme.typography.titleMedium)
@@ -545,14 +574,27 @@ fun DetalleTareaScreen(
                     )
                 }) { Text("Elegir fotografía") }
                 OutlinedButton(onClick = {
+                    var uri: Uri? = null
                     try {
-                        val uri = crearUriFotografia(context)
+                        uri = crearUriFotografia(context)
                         uriCamaraPendiente = uri
                         camaraEvidencia.launch(uri)
                     } catch (exception: java.io.IOException) {
+                        uri?.let { eliminarFotografiaTemporal(context, it) }
+                        uriCamaraPendiente = null
                         errorEntrega = "No se pudo preparar la cámara."
                     } catch (exception: SecurityException) {
+                        uri?.let { eliminarFotografiaTemporal(context, it) }
+                        uriCamaraPendiente = null
                         errorEntrega = "No se pudo acceder a la cámara."
+                    } catch (exception: ActivityNotFoundException) {
+                        uri?.let { eliminarFotografiaTemporal(context, it) }
+                        uriCamaraPendiente = null
+                        errorEntrega = "No hay una aplicación de cámara disponible."
+                    } catch (exception: IllegalArgumentException) {
+                        uri?.let { eliminarFotografiaTemporal(context, it) }
+                        uriCamaraPendiente = null
+                        errorEntrega = "No se pudo preparar el archivo para la cámara."
                     }
                 }) { Text("Tomar foto") }
             }
@@ -566,6 +608,7 @@ fun DetalleTareaScreen(
                     contentScale = ContentScale.Crop
                 )
                 TextButton(onClick = {
+                    imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
                     imagenEntrega = null
                     errorEntrega = null
                 }) { Text("Quitar fotografía") }
@@ -583,6 +626,7 @@ fun DetalleTareaScreen(
                         enviandoEntrega = false
                         errorEntrega = resultado
                         if (resultado == null) {
+                            imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
                             comentarioEntrega = ""
                             imagenEntrega = null
                         }
@@ -770,6 +814,23 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     Text("Reportado por: ${reportante?.nombreCompleto ?: "Usuario"}")
                     Text("Fecha: ${reporte.fechaReporte}")
                     Text("Estado: ${reporte.estado}")
+                    EvidenciaFotograficaSection(
+                        titulo = "Fotografías del reporte",
+                        evidencias = viewModel.evidenciasDeReporte(reporte.id),
+                        editable = viewModel.esAdministrador ||
+                            reporte.usuarioId == uiState.usuarioActual?.id,
+                        onAgregarFoto = { uri, onResult ->
+                            viewModel.agregarEvidencia(
+                                TipoAsociacionEvidencia.REPORTE,
+                                reporte.id,
+                                uri,
+                                onResult
+                            )
+                        },
+                        onEliminarFoto = { evidencia, onResult ->
+                            viewModel.eliminarEvidencia(evidencia.id, onResult)
+                        }
+                    )
                     if (viewModel.esAdministrador) {
                         CampoSeleccion(
                             etiqueta = "Cambiar estado",

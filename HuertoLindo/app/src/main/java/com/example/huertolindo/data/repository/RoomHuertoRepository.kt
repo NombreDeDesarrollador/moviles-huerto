@@ -13,6 +13,7 @@ import com.example.huertolindo.data.model.Evidencia
 import com.example.huertolindo.data.model.ReporteProblema
 import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
+import com.example.huertolindo.data.model.TipoAsociacionEvidencia
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.data.model.Validacion
 import com.example.huertolindo.data.security.PasswordHasher
@@ -143,6 +144,39 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         tareaId: String,
         comentario: String,
         imagenUri: Uri
+    ): Evidencia = copiarEvidenciaLocal(
+        imagenUri = imagenUri,
+        descripcion = comentario,
+        tareaId = tareaId
+    )
+
+    override suspend fun guardarEvidenciaAsociada(
+        tipoAsociacion: TipoAsociacionEvidencia,
+        entidadId: String,
+        imagenUri: Uri
+    ): Evidencia {
+        val evidencia = copiarEvidenciaLocal(
+            imagenUri = imagenUri,
+            tareaId = if (tipoAsociacion == TipoAsociacionEvidencia.TAREA) entidadId else null,
+            cultivoId = if (tipoAsociacion == TipoAsociacionEvidencia.CULTIVO) entidadId else null,
+            reporteId = if (tipoAsociacion == TipoAsociacionEvidencia.REPORTE) entidadId else null
+        )
+        var guardada = false
+        try {
+            database.evidenciaDao().insertar(evidencia)
+            guardada = true
+            return evidencia
+        } finally {
+            if (!guardada) eliminarArchivoEvidencia(evidencia.rutaArchivo)
+        }
+    }
+
+    private fun copiarEvidenciaLocal(
+        imagenUri: Uri,
+        descripcion: String = "",
+        tareaId: String? = null,
+        cultivoId: String? = null,
+        reporteId: String? = null
     ): Evidencia {
         val carpeta = File(context.filesDir, "evidencias")
         if (!carpeta.exists() && !carpeta.mkdirs()) {
@@ -163,11 +197,21 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         return Evidencia(
             id = UUID.randomUUID().toString(),
             tareaId = tareaId,
+            cultivoId = cultivoId,
+            reporteId = reporteId,
             tipo = "foto",
             rutaArchivo = archivo.absolutePath,
-            descripcion = comentario,
+            descripcion = descripcion,
             fechaRegistro = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(Date())
         )
+    }
+
+    override suspend fun eliminarEvidencia(evidencia: Evidencia) {
+        val archivo = File(evidencia.rutaArchivo)
+        if (archivo.exists() && !archivo.delete()) {
+            throw IOException("No se pudo eliminar el archivo de evidencia.")
+        }
+        database.evidenciaDao().eliminar(evidencia)
     }
 
     override fun eliminarArchivoEvidencia(rutaArchivo: String): Boolean = File(rutaArchivo).delete()

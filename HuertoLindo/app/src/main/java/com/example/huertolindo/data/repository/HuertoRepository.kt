@@ -8,6 +8,7 @@ import com.example.huertolindo.data.model.Evidencia
 import com.example.huertolindo.data.model.ReporteProblema
 import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
+import com.example.huertolindo.data.model.TipoAsociacionEvidencia
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.data.model.Validacion
 
@@ -70,6 +71,12 @@ interface HuertoRepository {
     suspend fun obtenerReportesProblema(usuarioId: String?): List<ReporteProblema>
     suspend fun actualizarReporte(reporte: ReporteProblema)
     suspend fun guardarEvidenciaLocal(tareaId: String, comentario: String, imagenUri: Uri): Evidencia
+    suspend fun guardarEvidenciaAsociada(
+        tipoAsociacion: TipoAsociacionEvidencia,
+        entidadId: String,
+        imagenUri: Uri
+    ): Evidencia
+    suspend fun eliminarEvidencia(evidencia: Evidencia)
     fun eliminarArchivoEvidencia(rutaArchivo: String): Boolean
     suspend fun migrarEvidenciasLegacy(evidenciasExistentes: List<Evidencia>)
     suspend fun migrarHistorialLegacy(actividadesExistentes: List<ActividadTarea>)
