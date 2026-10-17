@@ -29,13 +29,20 @@ object PermisosHuerto {
     fun puedeValidarTarea(perfil: String?, estado: String): Boolean =
         esAdministrador(perfil) && estado == "Por validar"
 
+    fun puedeValidarTarea(perfil: String?, administradorId: String, tarea: Tarea): Boolean =
+        puedeValidarTarea(perfil, tarea.estado) && administradorId != tarea.asignadoA
+
     fun puedeRechazarTarea(perfil: String?, estado: String, motivo: String): Boolean =
         puedeValidarTarea(perfil, estado) && motivo.isNotBlank()
+
+    fun puedeActualizarEstadoProblema(perfil: String?, nuevoEstado: String): Boolean =
+        esAdministrador(perfil) &&
+            nuevoEstado in setOf("Pendiente", "En atención", "Resuelto")
 
     fun tareasAtrasadas(tareas: List<Tarea>, fechaActual: String): List<Tarea> =
         tareas.filter { tarea ->
             tarea.estado != "Completada" &&
-                tarea.fechaProgramada.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) &&
+                ReglasHuerto.esFechaIsoValida(tarea.fechaProgramada) &&
                 tarea.fechaProgramada < fechaActual
         }
 }

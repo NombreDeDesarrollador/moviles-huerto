@@ -11,6 +11,7 @@ import com.example.huertolindo.data.model.*
 import com.example.huertolindo.data.repository.HuertoRepository
 import com.example.huertolindo.data.repository.HuertoSnapshot
 import com.example.huertolindo.data.security.PermisosHuerto
+import com.example.huertolindo.data.security.ReglasHuerto
 import com.example.huertolindo.data.security.PasswordHasher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +27,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
-import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -452,7 +452,9 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun validarTarea(tareaId: String): Boolean {
         val administrador = usuarioActual ?: return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
-        if (!PermisosHuerto.puedeValidarTarea(usuarioActual?.perfil, tarea.estado)) return false
+        if (!PermisosHuerto.puedeValidarTarea(administrador.perfil, administrador.id, tarea)) {
+            return false
+        }
         val actualizada = tarea.copy(estado = "Completada")
         actualizarTarea(actualizada)
         val validacion = Validacion(
@@ -535,11 +537,13 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         descripcion: String,
         sectorId: String,
         usuarioId: String,
-        fechaProgramada: String
+        fechaProgramada: String,
+        tipo: String = TipoTarea.MANTENIMIENTO
     ): Boolean {
         if (!esAdministrador ||
             titulo.isBlank() || descripcion.isBlank() ||
             !esFechaProgramadaValida(fechaProgramada) ||
+            !TipoTarea.esValido(tipo) ||
             listaSectores.value.none { it.id == sectorId } ||
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
         ) return false
@@ -554,7 +558,8 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             sectorId = sectorId,
             asignadoA = usuarioId,
             estado = "Pendiente",
-            fechaProgramada = fechaProgramada.trim()
+            fechaProgramada = fechaProgramada.trim(),
+            tipo = tipo
         )
         _listaTareas.value = listaTareas.value + tarea
         val actividad = registrarActividad(
@@ -575,16 +580,19 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         descripcion: String,
         sectorId: String,
         usuarioId: String,
-        fechaProgramada: String
+        fechaProgramada: String,
+        tipo: String? = null
     ): Boolean {
+        val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
+        val tipoActualizado = tipo ?: tarea.tipo
         if (!esAdministrador ||
             titulo.isBlank() || descripcion.isBlank() ||
             !esFechaProgramadaValida(fechaProgramada) ||
+            !TipoTarea.esValido(tipoActualizado) ||
             listaSectores.value.none { it.id == sectorId } ||
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == PermisosHuerto.ESTUDIANTE }
         ) return false
 
-        val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         if (tarea.estado == "Completada") return false
 
         val tareaActualizada = tarea.copy(
@@ -593,6 +601,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
                 sectorId = sectorId,
                 asignadoA = usuarioId,
                 fechaProgramada = fechaProgramada.trim(),
+                tipo = tipoActualizado,
                 estado = "Pendiente",
                 motivoRechazo = ""
             )
@@ -688,7 +697,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         nuevoEstado: String,
         onResult: (String?) -> Unit = {}
     ) {
-        if (!esAdministrador || nuevoEstado !in setOf("Pendiente", "En atención", "Resuelto")) {
+        if (!PermisosHuerto.puedeActualizarEstadoProblema(usuarioActual?.perfil, nuevoEstado)) {
             onResult("Solo el administrador puede cambiar a un estado válido.")
             return
         }
@@ -727,22 +736,25 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             return reportesProblemas.value.filter { it.usuarioId == usuarioId }
         }
 
-    private fun esFechaProgramadaValida(fecha: String): Boolean {
-        if (!fecha.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return false
-        val formato = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
-            isLenient = false
-        }
-        val posicion = ParsePosition(0)
-        return formato.parse(fecha, posicion) != null && posicion.index == fecha.length
-    }
+    private fun esFechaProgramadaValida(fecha: String): Boolean =
+        ReglasHuerto.esFechaIsoValida(fecha)
 
-    fun agregarSector(nombre: String, descripcion: String): Boolean {
-        if (!esAdministrador || nombre.isBlank() || descripcion.isBlank()) return false
+    fun agregarSector(
+        nombre: String,
+        ubicacion: String,
+        descripcion: String,
+        estado: String
+    ): Boolean {
+        if (!esAdministrador || nombre.isBlank() || ubicacion.isBlank() ||
+            descripcion.isBlank() ||
+            estado !in setOf("Disponible", "En uso", "Inactivo")
+        ) return false
         val sector = Sector(
             id = java.util.UUID.randomUUID().toString(),
             nombre = nombre.trim(),
             descripcion = descripcion.trim(),
-            estado = "Disponible"
+            estado = estado,
+            ubicacion = ubicacion.trim()
         )
         _listaSectores.value = listaSectores.value + sector
         persistir { huertoRepository.guardarSector(sector) }
@@ -752,15 +764,17 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun editarSector(
         sectorId: String,
         nombre: String,
+        ubicacion: String,
         descripcion: String,
         estado: String
     ): Boolean {
-        if (!esAdministrador || nombre.isBlank() || descripcion.isBlank() ||
+        if (!esAdministrador || nombre.isBlank() || ubicacion.isBlank() || descripcion.isBlank() ||
             estado !in setOf("Disponible", "En uso", "Inactivo")
         ) return false
         val sector = listaSectores.value.firstOrNull { it.id == sectorId } ?: return false
         val actualizado = sector.copy(
             nombre = nombre.trim(),
+            ubicacion = ubicacion.trim(),
             descripcion = descripcion.trim(),
             estado = estado
         )
@@ -789,10 +803,14 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         nombre: String,
         sectorId: String,
         fechaSiembra: String,
+        fechaCosechaEstimada: String,
+        estadoDesarrollo: String,
         frecuenciaRiego: String
     ): Boolean {
         if (!esAdministrador || nombre.isBlank() ||
-            fechaSiembra.isBlank() || frecuenciaRiego.isBlank() ||
+            !ReglasHuerto.fechaCosechaValida(fechaSiembra, fechaCosechaEstimada) ||
+            !EstadoCultivo.esValido(estadoDesarrollo) ||
+            frecuenciaRiego.isBlank() ||
             listaSectores.value.none { it.id == sectorId }
         ) return false
 
@@ -801,7 +819,8 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             nombreComun = nombre.trim(),
             sectorId = sectorId,
             fechaSiembra = fechaSiembra.trim(),
-            estadoDesarrollo = "En crecimiento",
+            fechaCosechaEstimada = fechaCosechaEstimada.trim(),
+            estadoDesarrollo = estadoDesarrollo,
             frecuenciaRiego = frecuenciaRiego.trim()
         )
         _listaCultivos.value = listaCultivos.value + cultivo
@@ -814,19 +833,21 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         cultivoId: String,
         nombre: String,
         fechaSiembra: String,
+        fechaCosechaEstimada: String,
         estadoDesarrollo: String,
         frecuenciaRiego: String
     ): Boolean {
         if (!esAdministrador ||
             nombre.isBlank() ||
-            !esFechaProgramadaValida(fechaSiembra) ||
-            estadoDesarrollo !in setOf("Sembrado", "En crecimiento", "Desarrollo", "Listo para cosechar") ||
+            !ReglasHuerto.fechaCosechaValida(fechaSiembra, fechaCosechaEstimada) ||
+            !EstadoCultivo.esValido(estadoDesarrollo) ||
             frecuenciaRiego.isBlank()
         ) return false
         val cultivo = listaCultivos.value.firstOrNull { it.id == cultivoId } ?: return false
         val actualizado = cultivo.copy(
             nombreComun = nombre.trim(),
             fechaSiembra = fechaSiembra.trim(),
+            fechaCosechaEstimada = fechaCosechaEstimada.trim(),
             estadoDesarrollo = estadoDesarrollo,
             frecuenciaRiego = frecuenciaRiego.trim()
         )

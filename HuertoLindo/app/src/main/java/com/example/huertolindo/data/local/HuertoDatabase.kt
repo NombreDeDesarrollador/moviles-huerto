@@ -182,7 +182,7 @@ interface ReporteProblemaDao {
         ReporteProblema::class,
         ActividadTarea::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {
@@ -304,6 +304,16 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sectores ADD COLUMN ubicacion TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE cultivos ADD COLUMN fecha_cosecha_estimada TEXT NOT NULL DEFAULT ''")
+        db.execSQL(
+            "ALTER TABLE tareas ADD COLUMN tipo TEXT NOT NULL DEFAULT 'Mantenimiento'"
+        )
+    }
+}
+
 object HuertoDatabaseProvider {
     @Volatile
     private var INSTANCE: HuertoDatabase? = null
@@ -315,7 +325,13 @@ object HuertoDatabaseProvider {
                 HuertoDatabase::class.java,
                 "huerto_lindo_room.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6
+                )
                 .build()
             INSTANCE = instance
             instance

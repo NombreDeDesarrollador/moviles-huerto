@@ -22,5 +22,7 @@ data class Cultivo(
     @ColumnInfo(name = "sector_id") val sectorId: String,
     @ColumnInfo(name = "fecha_siembra") val fechaSiembra: String,
     @ColumnInfo(name = "estado_desarrollo") val estadoDesarrollo: String,
-    @ColumnInfo(name = "frecuencia_riego") val frecuenciaRiego: String
+    @ColumnInfo(name = "frecuencia_riego") val frecuenciaRiego: String,
+    @ColumnInfo(name = "fecha_cosecha_estimada", defaultValue = "''")
+    val fechaCosechaEstimada: String = ""
 )

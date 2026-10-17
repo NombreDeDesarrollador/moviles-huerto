@@ -44,9 +44,11 @@ import com.example.huertolindo.ui.crearUriFotografia
 import com.example.huertolindo.ui.eliminarFotografiaTemporal
 import com.example.huertolindo.data.model.SensorSimulado
 import com.example.huertolindo.data.model.Cultivo
+import com.example.huertolindo.data.model.EstadoCultivo
 import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
 import com.example.huertolindo.data.model.TipoAsociacionEvidencia
+import com.example.huertolindo.data.model.TipoTarea
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.ui.HuertoStatusChip
 import com.example.huertolindo.viewmodel.HuertoViewModel
@@ -86,6 +88,7 @@ fun SectoresScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
+                    Text("Ubicación: ${sector.ubicacion.ifBlank { "Sin ubicación registrada" }}")
                     Text(sector.descripcion)
                     HuertoStatusChip(sector.estado)
                     Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
@@ -110,16 +113,16 @@ fun SectoresScreen(
                 mostrarFormulario = false
                 sectorEnEdicion = null
             },
-            onSave = { nombre, descripcion, estado ->
+            onSave = { nombre, ubicacion, descripcion, estado ->
                 val guardado = sectorEnEdicion?.let {
-                    viewModel.editarSector(it.id, nombre, descripcion, estado)
-                } ?: viewModel.agregarSector(nombre, descripcion)
+                    viewModel.editarSector(it.id, nombre, ubicacion, descripcion, estado)
+                } ?: viewModel.agregarSector(nombre, ubicacion, descripcion, estado)
                 if (guardado) {
                     error = null
                     mostrarFormulario = false
                     sectorEnEdicion = null
                 } else {
-                    error = "Completa el nombre y la descripción del sector."
+                    error = "Completa el nombre, la ubicación y la descripción del sector."
                 }
                 guardado
             }
@@ -146,6 +149,7 @@ fun DetalleSectorScreen(
             Text("El sector seleccionado ya no está disponible.")
             return@ScreenLayout
         }
+        Text("Ubicación: ${sector.ubicacion.ifBlank { "Sin ubicación registrada" }}")
         Text(sector.descripcion, style = MaterialTheme.typography.bodyLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Estado:", style = MaterialTheme.typography.bodyLarge)
@@ -173,6 +177,11 @@ fun DetalleSectorScreen(
                         HuertoStatusChip(cultivo.estadoDesarrollo)
                     }
                     Text("Siembra: ${cultivo.fechaSiembra}")
+                    Text(
+                        "Cosecha estimada: ${
+                            cultivo.fechaCosechaEstimada.ifBlank { "Sin fecha registrada" }
+                        }"
+                    )
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
                             cultivoEnEdicion = cultivo
@@ -193,16 +202,30 @@ fun DetalleSectorScreen(
                 mostrarFormulario = false
                 cultivoEnEdicion = null
             },
-            onSave = { nombre, fecha, estado, frecuencia ->
+            onSave = { nombre, fechaSiembra, fechaCosecha, estado, frecuencia ->
                 val guardado = cultivoEnEdicion?.let {
-                    viewModel.editarCultivo(it.id, nombre, fecha, estado, frecuencia)
-                } ?: viewModel.agregarCultivo(nombre, sectorId, fecha, frecuencia)
+                    viewModel.editarCultivo(
+                        it.id,
+                        nombre,
+                        fechaSiembra,
+                        fechaCosecha,
+                        estado,
+                        frecuencia
+                    )
+                } ?: viewModel.agregarCultivo(
+                    nombre,
+                    sectorId,
+                    fechaSiembra,
+                    fechaCosecha,
+                    estado,
+                    frecuencia
+                )
                 if (guardado) {
                     error = null
                     mostrarFormulario = false
                     cultivoEnEdicion = null
                 } else {
-                    error = "Completa los datos del cultivo e ingresa una fecha válida (AAAA-MM-DD)."
+                    error = "Completa los datos e ingresa fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra."
                 }
                 guardado
             }
@@ -222,6 +245,11 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
         val sector = uiState.sectores.firstOrNull { it.id == cultivo.sectorId }
         Text("Sector: ${sector?.nombre ?: "Sin sector"}")
         Text("Fecha de siembra: ${cultivo.fechaSiembra}")
+        Text(
+            "Cosecha estimada: ${
+                cultivo.fechaCosechaEstimada.ifBlank { "Sin fecha registrada" }
+            }"
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Estado de desarrollo:")
             HuertoStatusChip(cultivo.estadoDesarrollo)
@@ -350,6 +378,7 @@ fun TareasScreen(
                 ) {
                     Text(tarea.titulo, style = MaterialTheme.typography.titleMedium)
                     HuertoStatusChip(tarea.estado)
+                    Text("Tipo: ${tarea.tipo}")
                     Text("Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}")
                     if (viewModel.tareasAtrasadas.any { it.id == tarea.id }) {
                         HuertoStatusChip("Atrasada")
@@ -381,13 +410,13 @@ fun TareasScreen(
                 mostrarFormulario = false
                 tareaEnEdicion = null
             },
-            onSave = { titulo, instrucciones, sectorId, usuarioId, fechaProgramada ->
+            onSave = { titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo ->
                 val guardada = tareaEnEdicion?.let { tarea ->
                     viewModel.editarTarea(
-                        tarea.id, titulo, instrucciones, sectorId, usuarioId, fechaProgramada
+                        tarea.id, titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo
                     )
                 } ?: viewModel.crearTarea(
-                    titulo, instrucciones, sectorId, usuarioId, fechaProgramada
+                    titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo
                 )
                 if (guardada) {
                     error = null
@@ -509,6 +538,7 @@ fun DetalleTareaScreen(
         val estudiante = uiState.usuariosDisponibles.firstOrNull { it.id == tarea.asignadoA }
         Text("Instrucciones", style = MaterialTheme.typography.titleMedium)
         Text(tarea.descripcion, style = MaterialTheme.typography.bodyLarge)
+        Text("Tipo de tarea: ${tarea.tipo}")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Estado:", style = MaterialTheme.typography.bodyLarge)
             HuertoStatusChip(tarea.estado)
@@ -551,7 +581,10 @@ fun DetalleTareaScreen(
         if (validaciones.isNotEmpty()) {
             Text("Historial de validación", style = MaterialTheme.typography.titleMedium)
             validaciones.forEach { validacion ->
+                val administrador = uiState.usuariosDisponibles
+                    .firstOrNull { it.id == validacion.administradorId }
                 Text("${validacion.resultado} · ${validacion.fechaValidacion}")
+                Text("Revisó: ${administrador?.nombreCompleto ?: validacion.administradorId}")
                 if (validacion.observaciones.isNotBlank()) {
                     Text("Observaciones: ${validacion.observaciones}")
                 }
@@ -999,9 +1032,10 @@ private fun ReporteDato(etiqueta: String, valor: String) {
 private fun FormularioSector(
     sector: Sector? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Boolean
+    onSave: (String, String, String, String) -> Boolean
 ) {
     var nombre by remember(sector?.id) { mutableStateOf(sector?.nombre.orEmpty()) }
+    var ubicacion by remember(sector?.id) { mutableStateOf(sector?.ubicacion.orEmpty()) }
     var descripcion by remember(sector?.id) { mutableStateOf(sector?.descripcion.orEmpty()) }
     var estado by remember(sector?.id) { mutableStateOf(sector?.estado ?: "Disponible") }
     var mostrarError by remember { mutableStateOf(false) }
@@ -1018,26 +1052,36 @@ private fun FormularioSector(
                     isError = mostrarError && nombre.isBlank()
                 )
                 OutlinedTextField(
+                    value = ubicacion,
+                    onValueChange = { ubicacion = it },
+                    label = { Text("Ubicación") },
+                    singleLine = true,
+                    isError = mostrarError && ubicacion.isBlank()
+                )
+                OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
                     label = { Text("Descripción") },
                     isError = mostrarError && descripcion.isBlank()
                 )
-                if (sector != null) {
-                    CampoSeleccion(
-                        etiqueta = "Estado",
-                        opciones = listOf("Disponible", "En uso", "Inactivo").map { it to it },
-                        seleccionado = estado,
-                        onSeleccionar = { estado = it }
-                    )
-                }
+                CampoSeleccion(
+                    etiqueta = "Estado",
+                    opciones = listOf("Disponible", "En uso", "Inactivo").map { it to it },
+                    seleccionado = estado,
+                    onSeleccionar = { estado = it }
+                )
                 if (mostrarError) {
-                    Text("Completa el nombre y la descripción.", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "Completa el nombre, la ubicación y la descripción.",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { mostrarError = !onSave(nombre, descripcion, estado) }) {
+            TextButton(onClick = {
+                mostrarError = !onSave(nombre, ubicacion, descripcion, estado)
+            }) {
                 Text(if (sector == null) "Guardar" else "Guardar cambios")
             }
         },
@@ -1049,10 +1093,13 @@ private fun FormularioSector(
 private fun FormularioCultivo(
     cultivo: Cultivo? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Boolean
+    onSave: (String, String, String, String, String) -> Boolean
 ) {
     var nombre by remember(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
     var fechaSiembra by remember(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
+    var fechaCosechaEstimada by remember(cultivo?.id) {
+        mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
+    }
     var estado by remember(cultivo?.id) {
         mutableStateOf(cultivo?.estadoDesarrollo ?: "En crecimiento")
     }
@@ -1077,19 +1124,19 @@ private fun FormularioCultivo(
                     singleLine = true,
                     isError = mostrarError
                 )
-                if (cultivo != null) {
-                    CampoSeleccion(
-                        etiqueta = "Estado de desarrollo",
-                        opciones = listOf(
-                            "Sembrado",
-                            "En crecimiento",
-                            "Desarrollo",
-                            "Listo para cosechar"
-                        ).map { it to it },
-                        seleccionado = estado,
-                        onSeleccionar = { estado = it }
-                    )
-                }
+                OutlinedTextField(
+                    value = fechaCosechaEstimada,
+                    onValueChange = { fechaCosechaEstimada = it },
+                    label = { Text("Cosecha estimada (AAAA-MM-DD)") },
+                    singleLine = true,
+                    isError = mostrarError
+                )
+                CampoSeleccion(
+                    etiqueta = "Estado de desarrollo",
+                    opciones = EstadoCultivo.opciones.map { it to it },
+                    seleccionado = estado,
+                    onSeleccionar = { estado = it }
+                )
                 OutlinedTextField(
                     value = frecuencia,
                     onValueChange = { frecuencia = it },
@@ -1099,7 +1146,7 @@ private fun FormularioCultivo(
                 )
                 if (mostrarError) {
                     Text(
-                        "Completa todos los campos e ingresa una fecha válida (AAAA-MM-DD).",
+                        "Completa todos los campos con fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra.",
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -1107,7 +1154,13 @@ private fun FormularioCultivo(
         },
         confirmButton = {
             TextButton(onClick = {
-                mostrarError = !onSave(nombre, fechaSiembra, estado, frecuencia)
+                mostrarError = !onSave(
+                    nombre,
+                    fechaSiembra,
+                    fechaCosechaEstimada,
+                    estado,
+                    frecuencia
+                )
             }) { Text(if (cultivo == null) "Guardar" else "Guardar cambios") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
@@ -1120,7 +1173,7 @@ private fun FormularioTarea(
     estudiantes: List<Usuario>,
     tarea: Tarea? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String) -> Boolean
+    onSave: (String, String, String, String, String, String) -> Boolean
 ) {
     var titulo by remember(tarea?.id) { mutableStateOf(tarea?.titulo.orEmpty()) }
     var instrucciones by remember(tarea?.id) { mutableStateOf(tarea?.descripcion.orEmpty()) }
@@ -1128,6 +1181,9 @@ private fun FormularioTarea(
     var usuarioId by remember(tarea?.id) { mutableStateOf(tarea?.asignadoA.orEmpty()) }
     var fechaProgramada by remember(tarea?.id) {
         mutableStateOf(tarea?.fechaProgramada.orEmpty())
+    }
+    var tipo by remember(tarea?.id) {
+        mutableStateOf(tarea?.tipo ?: TipoTarea.MANTENIMIENTO)
     }
     var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
@@ -1145,6 +1201,12 @@ private fun FormularioTarea(
                     { fechaProgramada = it },
                     label = { Text("Fecha programada (AAAA-MM-DD)") },
                     singleLine = true
+                )
+                CampoSeleccion(
+                    etiqueta = "Tipo de tarea",
+                    opciones = TipoTarea.opciones.map { it to it },
+                    seleccionado = tipo,
+                    onSeleccionar = { tipo = it }
                 )
                 CampoSeleccion(
                     etiqueta = "Sector",
@@ -1171,7 +1233,14 @@ private fun FormularioTarea(
         },
         confirmButton = {
             TextButton(onClick = {
-                mostrarError = !onSave(titulo, instrucciones, sectorId, usuarioId, fechaProgramada)
+                mostrarError = !onSave(
+                    titulo,
+                    instrucciones,
+                    sectorId,
+                    usuarioId,
+                    fechaProgramada,
+                    tipo
+                )
             }) { Text(if (tarea == null) "Crear" else "Guardar cambios") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }

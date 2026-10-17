@@ -375,20 +375,31 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                 id = "1",
                 nombre = "Sector Norte",
                 descripcion = "Zona de hortalizas de hoja",
-                estado = "En uso"
+                estado = "En uso",
+                ubicacion = "Patio norte"
             ),
             Sector(
                 id = "2",
                 nombre = "Sector Sur",
                 descripcion = "Zona de raíces y tubérculos",
-                estado = "Disponible"
+                estado = "Disponible",
+                ubicacion = "Patio sur"
             )
         )
 
         val cultivosDemo = listOf(
-            Cultivo("1", "Lechuga", "1", "2026-09-20", "En crecimiento", "Cada 2 días"),
-            Cultivo("2", "Espinaca", "1", "2026-09-25", "En crecimiento", "Cada 2 días"),
-            Cultivo("3", "Zanahoria", "2", "2026-09-10", "Desarrollo", "Cada 3 días")
+            Cultivo(
+                "1", "Lechuga", "1", "2026-09-20", "En crecimiento", "Cada 2 días",
+                "2026-11-20"
+            ),
+            Cultivo(
+                "2", "Espinaca", "1", "2026-09-25", "En crecimiento", "Cada 2 días",
+                "2026-11-25"
+            ),
+            Cultivo(
+                "3", "Zanahoria", "2", "2026-09-10", "Desarrollo", "Cada 3 días",
+                "2026-12-10"
+            )
         )
 
         val tareasDemo = listOf(

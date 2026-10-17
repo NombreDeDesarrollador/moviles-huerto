@@ -1,7 +1,9 @@
 package com.example.huertolindo
 
 import com.example.huertolindo.data.model.Tarea
+import com.example.huertolindo.data.model.TipoTarea
 import com.example.huertolindo.data.security.PermisosHuerto
+import com.example.huertolindo.data.security.ReglasHuerto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -108,6 +110,81 @@ class PermisosHuertoTest {
     }
 
     @Test
+    fun administradorNoPuedeValidarUnaTareaAsignadaASiMismo() {
+        val tareaDelEstudiante = Tarea(
+            "propia", "Riego", "Regar", "sector-1", "estudiante-1", "Por validar"
+        )
+        assertFalse(
+            PermisosHuerto.puedeValidarTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareaDelEstudiante
+            )
+        )
+        assertTrue(
+            PermisosHuerto.puedeValidarTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "admin-2",
+                tareaDelEstudiante
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeValidarTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "estudiante-1",
+                tareaDelEstudiante
+            )
+        )
+        val asignadaAlAdministrador = tareaDelEstudiante.copy(asignadoA = "admin-1")
+        assertFalse(
+            PermisosHuerto.puedeValidarTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "admin-1",
+                asignadaAlAdministrador
+            )
+        )
+    }
+
+    @Test
+    fun fechaCosechaDebeSerValidaYNoAnteriorALaSiembra() {
+        assertTrue(ReglasHuerto.fechaCosechaValida("2026-10-17", "2026-12-01"))
+        assertTrue(ReglasHuerto.fechaCosechaValida("2026-10-17", "2026-10-17"))
+        assertFalse(ReglasHuerto.fechaCosechaValida("2026-10-17", "2026-10-16"))
+        assertFalse(ReglasHuerto.fechaCosechaValida("2026-02-30", "2026-03-10"))
+    }
+
+    @Test
+    fun tiposDeTareaSeLimitaALasCategoriasDelHuerto() {
+        assertTrue(TipoTarea.esValido(TipoTarea.RIEGO))
+        assertTrue(TipoTarea.esValido(TipoTarea.SIEMBRA))
+        assertTrue(TipoTarea.esValido(TipoTarea.MANTENIMIENTO))
+        assertTrue(TipoTarea.esValido(TipoTarea.OBSERVACION))
+        assertFalse(TipoTarea.esValido("Administrar presupuesto"))
+    }
+
+    @Test
+    fun soloAdministradorPuedeActualizarEstadosDeProblemasPermitidos() {
+        assertTrue(
+            PermisosHuerto.puedeActualizarEstadoProblema(
+                PermisosHuerto.ADMINISTRADOR,
+                "En atención"
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeActualizarEstadoProblema(
+                PermisosHuerto.ESTUDIANTE,
+                "Resuelto"
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeActualizarEstadoProblema(
+                PermisosHuerto.ADMINISTRADOR,
+                "Cerrado"
+            )
+        )
+    }
+
+    @Test
     fun usuarioNoAutenticadoNoPuedeConsultarTareas() {
         assertTrue(PermisosHuerto.tareasVisibles(null, null, tareas).isEmpty())
     }
@@ -119,7 +196,8 @@ class PermisosHuertoTest {
             Tarea("hoy", "Poda", "Podar", "sector-1", "estudiante-1", "Pendiente", "2026-10-16"),
             Tarea("futura", "Siembra", "Sembrar", "sector-1", "estudiante-1", "Pendiente", "2026-10-17"),
             Tarea("hecha", "Limpieza", "Limpiar", "sector-1", "estudiante-1", "Completada", "2026-10-10"),
-            Tarea("sin-fecha", "Observación", "Observar", "sector-1", "estudiante-1", "Pendiente")
+            Tarea("sin-fecha", "Observación", "Observar", "sector-1", "estudiante-1", "Pendiente"),
+            Tarea("fecha-invalida", "Poda", "Podar", "sector-1", "estudiante-1", "Pendiente", "2026-99-99")
         )
 
         assertEquals(

@@ -30,5 +30,7 @@ data class Tarea(
     @ColumnInfo(name = "usuario_id") val asignadoA: String,
     @ColumnInfo(name = "estado") val estado: String,
     @ColumnInfo(name = "fecha_programada") val fechaProgramada: String = "",
-    @ColumnInfo(name = "motivo_rechazo") val motivoRechazo: String = ""
+    @ColumnInfo(name = "motivo_rechazo") val motivoRechazo: String = "",
+    @ColumnInfo(name = "tipo", defaultValue = "'Mantenimiento'")
+    val tipo: String = TipoTarea.MANTENIMIENTO
 )
