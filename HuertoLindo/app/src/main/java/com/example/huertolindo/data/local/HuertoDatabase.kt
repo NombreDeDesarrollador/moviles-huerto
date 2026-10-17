@@ -9,6 +9,9 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.huertolindo.data.model.ActividadTarea
 import com.example.huertolindo.data.model.Cultivo
 import com.example.huertolindo.data.model.Evidencia
 import com.example.huertolindo.data.model.ReporteProblema
@@ -25,11 +28,27 @@ interface UsuarioDao {
     @Query("SELECT * FROM usuarios WHERE id = :usuarioId")
     suspend fun obtenerPorId(usuarioId: String): Usuario?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Query("SELECT * FROM usuarios WHERE correo = :correo COLLATE NOCASE LIMIT 1")
+    suspend fun obtenerPorCorreo(correo: String): Usuario?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertar(usuario: Usuario)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun asegurar(usuario: Usuario)
+
+    @Query(
+        """
+        UPDATE usuarios
+        SET password_salt = :passwordSalt, password_hash = :passwordHash
+        WHERE id = :usuarioId AND password_hash = ''
+        """
+    )
+    suspend fun importarCredencialesSiVacias(
+        usuarioId: String,
+        passwordSalt: String,
+        passwordHash: String
+    )
 
     @Update
     suspend fun actualizar(usuario: Usuario)
@@ -51,6 +70,9 @@ interface SectorDao {
 
     @Update
     suspend fun actualizar(sector: Sector)
+
+    @androidx.room.Delete
+    suspend fun eliminar(sector: Sector)
 }
 
 @Dao
@@ -69,6 +91,9 @@ interface CultivoDao {
 
     @Update
     suspend fun actualizar(cultivo: Cultivo)
+
+    @androidx.room.Delete
+    suspend fun eliminar(cultivo: Cultivo)
 }
 
 @Dao
@@ -82,15 +107,24 @@ interface TareaDao {
     @Query("SELECT * FROM tareas WHERE sector_id = :sectorId ORDER BY fecha_programada DESC")
     suspend fun obtenerPorSector(sectorId: String): List<Tarea>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Query("SELECT * FROM tareas WHERE id = :tareaId")
+    suspend fun obtenerPorId(tareaId: String): Tarea?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertar(tarea: Tarea)
 
     @Update
     suspend fun actualizar(tarea: Tarea)
+
+    @androidx.room.Delete
+    suspend fun eliminar(tarea: Tarea)
 }
 
 @Dao
 interface EvidenciaDao {
+    @Query("SELECT * FROM evidencias ORDER BY fecha_registro DESC")
+    suspend fun obtenerTodos(): List<Evidencia>
+
     @Query("SELECT * FROM evidencias WHERE tarea_id = :tareaId ORDER BY fecha_registro DESC")
     suspend fun obtenerPorTarea(tareaId: String): List<Evidencia>
 
@@ -100,11 +134,23 @@ interface EvidenciaDao {
 
 @Dao
 interface ValidacionDao {
+    @Query("SELECT * FROM validaciones ORDER BY fecha_validacion DESC")
+    suspend fun obtenerTodos(): List<Validacion>
+
     @Query("SELECT * FROM validaciones WHERE tarea_id = :tareaId ORDER BY fecha_validacion DESC")
     suspend fun obtenerPorTarea(tareaId: String): List<Validacion>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(validacion: Validacion)
+}
+
+@Dao
+interface ActividadTareaDao {
+    @Query("SELECT * FROM actividades_tarea ORDER BY fecha DESC")
+    suspend fun obtenerTodos(): List<ActividadTarea>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertar(actividad: ActividadTarea)
 }
 
 @Dao
@@ -130,9 +176,10 @@ interface ReporteProblemaDao {
         Tarea::class,
         Evidencia::class,
         Validacion::class,
-        ReporteProblema::class
+        ReporteProblema::class,
+        ActividadTarea::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {
@@ -143,6 +190,80 @@ abstract class HuertoDatabase : RoomDatabase() {
     abstract fun evidenciaDao(): EvidenciaDao
     abstract fun validacionDao(): ValidacionDao
     abstract fun reporteProblemaDao(): ReporteProblemaDao
+    abstract fun actividadTareaDao(): ActividadTareaDao
+}
+
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tareas ADD COLUMN motivo_rechazo TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE reporte_problemas RENAME TO reporte_problemas_v1")
+        db.execSQL(
+            """
+            CREATE TABLE reporte_problemas (
+                id TEXT NOT NULL PRIMARY KEY,
+                sector_id TEXT NOT NULL,
+                cultivo_id TEXT,
+                usuario_id TEXT NOT NULL,
+                descripcion TEXT NOT NULL,
+                prioridad TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                fecha_reporte TEXT NOT NULL,
+                FOREIGN KEY(sector_id) REFERENCES sectores(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(cultivo_id) REFERENCES cultivos(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO reporte_problemas
+                (id, sector_id, cultivo_id, usuario_id, descripcion, prioridad, estado, fecha_reporte)
+            SELECT r.id, t.sector_id, NULL, r.usuario_id, r.descripcion, r.prioridad, r.estado, r.fecha_reporte
+            FROM reporte_problemas_v1 r
+            INNER JOIN tareas t ON t.id = r.tarea_id
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE reporte_problemas_v1")
+        db.execSQL("CREATE INDEX index_reporte_problemas_sector_id ON reporte_problemas(sector_id)")
+        db.execSQL("CREATE INDEX index_reporte_problemas_cultivo_id ON reporte_problemas(cultivo_id)")
+        db.execSQL("CREATE INDEX index_reporte_problemas_usuario_id ON reporte_problemas(usuario_id)")
+    }
+}
+
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE actividades_tarea (
+                id TEXT NOT NULL PRIMARY KEY,
+                tarea_id TEXT NOT NULL,
+                titulo_tarea TEXT NOT NULL,
+                usuario_relacionado_id TEXT NOT NULL,
+                usuario_id TEXT NOT NULL,
+                nombre_usuario TEXT NOT NULL,
+                accion TEXT NOT NULL,
+                estado TEXT NOT NULL,
+                fecha TEXT NOT NULL,
+                FOREIGN KEY(tarea_id) REFERENCES tareas(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(usuario_relacionado_id) REFERENCES usuarios(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX index_actividades_tarea_tarea_id ON actividades_tarea(tarea_id)")
+        db.execSQL("CREATE INDEX index_actividades_tarea_usuario_id ON actividades_tarea(usuario_id)")
+        db.execSQL(
+            "CREATE INDEX index_actividades_tarea_usuario_relacionado_id ON actividades_tarea(usuario_relacionado_id)"
+        )
+    }
+}
+
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN password_salt TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
+        db.execSQL("CREATE UNIQUE INDEX index_usuarios_correo ON usuarios(correo)")
+    }
 }
 
 object HuertoDatabaseProvider {
@@ -156,7 +277,7 @@ object HuertoDatabaseProvider {
                 HuertoDatabase::class.java,
                 "huerto_lindo_room.db"
             )
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
             INSTANCE = instance
             instance

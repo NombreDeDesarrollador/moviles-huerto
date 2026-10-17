@@ -91,6 +91,20 @@ class PermisosHuertoTest {
                 "  "
             )
         )
+        assertFalse(
+            PermisosHuerto.puedeRechazarTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "Por validar",
+                "Falta evidencia"
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeRechazarTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "Pendiente",
+                "Falta evidencia"
+            )
+        )
     }
 
     @Test

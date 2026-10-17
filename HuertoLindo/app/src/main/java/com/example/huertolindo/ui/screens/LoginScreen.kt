@@ -18,6 +18,7 @@ fun LoginScreen(
     onRegisterClick: () -> Unit,
     mensajeInformativo: String? = null
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     var correo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var mensajeError by remember { mutableStateOf<String?>(null) }
@@ -35,6 +36,12 @@ fun LoginScreen(
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
         )
+
+        if (uiState.cargandoDatos) {
+            Spacer(modifier = Modifier.height(12.dp))
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            Text("Preparando los datos locales...")
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -108,9 +115,9 @@ fun LoginScreen(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !cargando
+            enabled = !cargando && !uiState.cargandoDatos
         ) {
-            if (cargando) {
+            if (cargando || uiState.cargandoDatos) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp
@@ -122,7 +129,8 @@ fun LoginScreen(
 
         TextButton(
             onClick = onRegisterClick,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !cargando && !uiState.cargandoDatos
         ) {
             Text("Registrarse")
         }

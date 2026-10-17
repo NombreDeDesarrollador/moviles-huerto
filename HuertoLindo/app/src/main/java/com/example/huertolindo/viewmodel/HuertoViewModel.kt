@@ -1,67 +1,96 @@
 package com.example.huertolindo.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteException
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.room.withTransaction
-import com.example.huertolindo.data.local.HuertoDatabaseProvider
-import com.example.huertolindo.data.local.UsuarioDatabaseHelper
+import android.util.Base64
 import com.example.huertolindo.data.model.*
+import com.example.huertolindo.data.repository.HuertoRepository
+import com.example.huertolindo.data.repository.HuertoSnapshot
 import com.example.huertolindo.data.security.PermisosHuerto
+import com.example.huertolindo.data.security.PasswordHasher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONException
-import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+data class HuertoUiState(
+    val usuarioActual: Usuario?,
+    val fotoPerfilUri: Uri?,
+    val sectores: List<Sector>,
+    val cultivos: List<Cultivo>,
+    val tareas: List<Tarea>,
+    val historial: List<ActividadTarea>,
+    val evidencias: List<Evidencia>,
+    val validaciones: List<Validacion>,
+    val comentariosEntrega: Map<String, String>,
+    val reportesProblemas: List<ReporteProblema>,
+    val cargandoReportesProblemas: Boolean,
+    val errorReportesProblemas: String?,
+    val usuariosDisponibles: List<Usuario>,
+    val errorCargaUsuarios: String?,
+    val cargandoDatos: Boolean,
+    val errorPersistencia: String?
+)
+
 class HuertoViewModel(application: Application) : AndroidViewModel(application) {
-    private val usuarioDatabase = UsuarioDatabaseHelper(application)
-    private val huertoDatabase = HuertoDatabaseProvider.getDatabase(application)
+    private val huertoRepository = HuertoRepository.create(application)
 
-    var usuarioActual by mutableStateOf<Usuario?>(null)
-        private set
+    private val _usuarioActual = MutableStateFlow<Usuario?>(null)
+    val usuarioActual: Usuario? get() = _usuarioActual.value
+    val usuarioActualState = _usuarioActual.asStateFlow()
 
-    var fotoPerfilUri by mutableStateOf<Uri?>(null)
-        private set
+    private val _fotoPerfilUri = MutableStateFlow<Uri?>(null)
+    val fotoPerfilUri: Uri? get() = _fotoPerfilUri.value
+    val fotoPerfilUriState = _fotoPerfilUri.asStateFlow()
 
-    var listaSectores = mutableStateOf(listOf<Sector>())
-        private set
+    private val _listaSectores = MutableStateFlow<List<Sector>>(emptyList())
+    val listaSectores = _listaSectores.asStateFlow()
 
-    var listaCultivos = mutableStateOf(listOf<Cultivo>())
-        private set
+    private val _listaCultivos = MutableStateFlow<List<Cultivo>>(emptyList())
+    val listaCultivos = _listaCultivos.asStateFlow()
 
-    private var listaTareas = mutableStateOf(listOf<Tarea>())
+    private val _listaTareas = MutableStateFlow<List<Tarea>>(emptyList())
+    private val listaTareas = _listaTareas.asStateFlow()
 
-    var historialActividades = mutableStateOf(listOf<ActividadTarea>())
-        private set
+    private val _historialActividades = MutableStateFlow<List<ActividadTarea>>(emptyList())
+    val historialActividades = _historialActividades.asStateFlow()
 
-    var evidenciasTareas = mutableStateOf(listOf<Evidencia>())
-        private set
+    private val _evidenciasTareas = MutableStateFlow<List<Evidencia>>(emptyList())
+    val evidenciasTareas = _evidenciasTareas.asStateFlow()
 
-    var comentariosEntrega = mutableStateOf<Map<String, String>>(emptyMap())
-        private set
+    private val _validacionesTareas = MutableStateFlow<List<Validacion>>(emptyList())
+    val validacionesTareas = _validacionesTareas.asStateFlow()
 
-    var reportesProblemas = mutableStateOf(listOf<ReporteProblema>())
-        private set
+    private val _comentariosEntrega = MutableStateFlow<Map<String, String>>(emptyMap())
+    val comentariosEntrega = _comentariosEntrega.asStateFlow()
 
-    var cargandoReportesProblemas by mutableStateOf(false)
-        private set
+    private val _reportesProblemas = MutableStateFlow<List<ReporteProblema>>(emptyList())
+    val reportesProblemas = _reportesProblemas.asStateFlow()
 
-    var errorReportesProblemas by mutableStateOf<String?>(null)
-        private set
+    private val _cargandoReportesProblemas = MutableStateFlow(false)
+    val cargandoReportesProblemasState = _cargandoReportesProblemas.asStateFlow()
+    val cargandoReportesProblemas: Boolean get() = _cargandoReportesProblemas.value
+
+    private val _errorReportesProblemas = MutableStateFlow<String?>(null)
+    val errorReportesProblemasState = _errorReportesProblemas.asStateFlow()
+    val errorReportesProblemas: String? get() = _errorReportesProblemas.value
 
     val esAdministrador: Boolean
         get() = PermisosHuerto.esAdministrador(usuarioActual?.perfil)
@@ -86,34 +115,123 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             return historialActividades.value.filter { it.usuarioRelacionadoId == usuarioId }
         }
 
-    var usuariosDisponibles = mutableStateOf(listOf<Usuario>())
-        private set
+    private val _usuariosDisponibles = MutableStateFlow<List<Usuario>>(emptyList())
+    val usuariosDisponibles = _usuariosDisponibles.asStateFlow()
 
-    var errorCargaUsuarios by mutableStateOf<String?>(null)
-        private set
+    private val _errorCargaUsuarios = MutableStateFlow<String?>(null)
+    val errorCargaUsuariosState = _errorCargaUsuarios.asStateFlow()
+    val errorCargaUsuarios: String? get() = _errorCargaUsuarios.value
+
+    private val _cargandoDatos = MutableStateFlow(true)
+    val cargandoDatosState = _cargandoDatos.asStateFlow()
+    val cargandoDatos: Boolean get() = _cargandoDatos.value
+
+    private val _errorPersistencia = MutableStateFlow<String?>(null)
+    val errorPersistenciaState = _errorPersistencia.asStateFlow()
+    val errorPersistencia: String? get() = _errorPersistencia.value
+
+    val uiState: StateFlow<HuertoUiState> = merge(
+        _usuarioActual.map { Unit },
+        _fotoPerfilUri.map { Unit },
+        _listaSectores.map { Unit },
+        _listaCultivos.map { Unit },
+        _listaTareas.map { Unit },
+        _historialActividades.map { Unit },
+        _evidenciasTareas.map { Unit },
+        _validacionesTareas.map { Unit },
+        _comentariosEntrega.map { Unit },
+        _reportesProblemas.map { Unit },
+        _cargandoReportesProblemas.map { Unit },
+        _errorReportesProblemas.map { Unit },
+        _usuariosDisponibles.map { Unit },
+        _errorCargaUsuarios.map { Unit },
+        _cargandoDatos.map { Unit },
+        _errorPersistencia.map { Unit }
+    ).scan(crearUiState()) { _, _ -> crearUiState() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, crearUiState())
+
+    private fun crearUiState() = HuertoUiState(
+        usuarioActual = usuarioActual,
+        fotoPerfilUri = fotoPerfilUri,
+        sectores = listaSectores.value,
+        cultivos = listaCultivos.value,
+        tareas = listaTareas.value,
+        historial = historialActividades.value,
+        evidencias = evidenciasTareas.value,
+        validaciones = validacionesTareas.value,
+        comentariosEntrega = comentariosEntrega.value,
+        reportesProblemas = reportesProblemas.value,
+        cargandoReportesProblemas = cargandoReportesProblemas,
+        errorReportesProblemas = errorReportesProblemas,
+        usuariosDisponibles = usuariosDisponibles.value,
+        errorCargaUsuarios = errorCargaUsuarios,
+        cargandoDatos = cargandoDatos,
+        errorPersistencia = errorPersistencia
+    )
 
     init {
-        cargarDatosFicticios()
-        cargarEntregasGuardadas()
-        cargarHistorial()
+        cargarDatosPersistentes()
     }
 
-    private fun cargarDatosFicticios() {
-        listaSectores.value = listOf(
-            Sector(id = "1", nombre = "Sector Norte", descripcion = "Zona de hortalizas de hoja", estado = "En uso"),
-            Sector(id = "2", nombre = "Sector Sur", descripcion = "Zona de raíces y tubérculos", estado = "Disponible")
-        )
+    private fun cargarDatosPersistentes() {
+        viewModelScope.launch {
+            try {
+                val snapshot = withContext(Dispatchers.IO) {
+                    huertoRepository.inicializar()
+                    huertoRepository.cargarSnapshot()
+                }
+                aplicarSnapshot(snapshot)
+                _usuariosDisponibles.value = withContext(Dispatchers.IO) {
+                    huertoRepository.obtenerUsuarios()
+                }
+                try {
+                    withContext(Dispatchers.IO) {
+                        huertoRepository.migrarEvidenciasLegacy(snapshot.evidencias)
+                        huertoRepository.migrarHistorialLegacy(snapshot.actividades)
+                    }
+                    aplicarSnapshot(withContext(Dispatchers.IO) { huertoRepository.cargarSnapshot() })
+                } catch (exception: SQLiteException) {
+                    android.util.Log.e("HuertoViewModel", "No se pudieron migrar datos locales anteriores.", exception)
+                    _errorPersistencia.value = "No se pudieron migrar algunos datos locales anteriores."
+                } catch (exception: JSONException) {
+                    android.util.Log.e("HuertoViewModel", "El formato de datos locales anteriores es inválido.", exception)
+                    _errorPersistencia.value = "No se pudieron leer algunos datos locales anteriores."
+                }
+                _cargandoDatos.value = false
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudieron cargar los datos locales.", exception)
+                _errorPersistencia.value = "No se pudieron cargar los datos guardados."
+                _cargandoDatos.value = false
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "La base de datos del huerto no está lista.", exception)
+                _errorPersistencia.value = "No se pudo inicializar la base de datos del huerto."
+                _cargandoDatos.value = false
+            }
+        }
+    }
 
-        listaCultivos.value = listOf(
-            Cultivo("1", "Lechuga", "1", "2026-09-20", "En crecimiento", "Cada 2 días"),
-            Cultivo("2", "Espinaca", "1", "2026-09-25", "En crecimiento", "Cada 2 días"),
-            Cultivo("3", "Zanahoria", "2", "2026-09-10", "Desarrollo", "Cada 3 días")
-        )
+    private fun aplicarSnapshot(snapshot: HuertoSnapshot) {
+        _listaSectores.value = snapshot.sectores
+        _listaCultivos.value = snapshot.cultivos
+        _listaTareas.value = snapshot.tareas
+        _evidenciasTareas.value = snapshot.evidencias.filter { File(it.rutaArchivo).isFile }
+        _validacionesTareas.value = snapshot.validaciones
+        _comentariosEntrega.value = evidenciasTareas.value
+            .groupBy { it.tareaId }
+            .mapValues { (_, evidencias) -> evidencias.first().descripcion }
+        _reportesProblemas.value = snapshot.reportesProblemas
+        _historialActividades.value = snapshot.actividades
+    }
 
-        listaTareas.value = listOf(
-            Tarea(id = "1", titulo = "Regar cultivos", descripcion = "Aplicar agua en la base de cada planta", sectorId = "1", asignadoA = "student-vicente", estado = "Pendiente", fechaProgramada = "2026-10-17"),
-            Tarea(id = "2", titulo = "Revisar zanahorias", descripcion = "Verificar humedad y retirar malezas", sectorId = "2", asignadoA = "student-matias", estado = "Pendiente", fechaProgramada = "2026-10-18")
-        )
+    private fun refrescarSnapshot() {
+        viewModelScope.launch {
+            try {
+                aplicarSnapshot(withContext(Dispatchers.IO) { huertoRepository.cargarSnapshot() })
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde Room.", exception)
+                _errorPersistencia.value = "No se pudieron actualizar los datos guardados."
+            }
+        }
     }
 
     fun entregarTarea(
@@ -144,7 +262,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val evidencia = try {
                 withContext(Dispatchers.IO) {
-                    guardarEvidenciaLocal(tareaId, comentario.trim(), imagenUri)
+                    huertoRepository.guardarEvidenciaLocal(tareaId, comentario.trim(), imagenUri)
                 }
             } catch (exception: IOException) {
                 onResult("No se pudo guardar la fotografía. Inténtalo nuevamente.")
@@ -154,11 +272,38 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
                 return@launch
             }
 
-            evidenciasTareas.value = evidenciasTareas.value + evidencia
-            comentariosEntrega.value = comentariosEntrega.value + (tareaId to comentario.trim())
-            guardarEntregas()
-            actualizarEstadoTarea(tareaId, "Por validar")
-            registrarActividad(tarea, "Entregó la tarea con comentario y evidencia", "Por validar")
+            _evidenciasTareas.value = evidenciasTareas.value + evidencia
+            _comentariosEntrega.value = comentariosEntrega.value + (tareaId to comentario.trim())
+            val tareaEntregada = tarea.copy(estado = "Por validar")
+            val actividad = registrarActividad(
+                tareaEntregada,
+                "Entregó la tarea con comentario y evidencia",
+                "Por validar"
+            )
+            try {
+                withContext(Dispatchers.IO) {
+                    huertoRepository.entregarTarea(
+                        tareaEntregada,
+                        evidencia,
+                        usuario,
+                        actividad ?: throw IllegalStateException("No se pudo registrar la entrega.")
+                    )
+                }
+                actualizarTarea(tareaEntregada)
+            } catch (exception: SQLiteException) {
+                withContext(Dispatchers.IO) {
+                    huertoRepository.eliminarArchivoEvidencia(evidencia.rutaArchivo)
+                }
+                _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidencia.id }
+                _comentariosEntrega.value = comentariosEntrega.value - tareaId
+                actividad?.let { evento ->
+                    _historialActividades.value = historialActividades.value.filterNot { it.id == evento.id }
+                }
+                android.util.Log.e("HuertoViewModel", "No se pudo guardar la entrega en Room.", exception)
+                _errorPersistencia.value = "No se pudo guardar la entrega en la base de datos."
+                onResult(errorPersistencia)
+                return@launch
+            }
             onResult(null)
         }
     }
@@ -166,119 +311,97 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun evidenciasDeTarea(tareaId: String): List<Evidencia> =
         evidenciasTareas.value.filter { it.tareaId == tareaId }
 
-    private fun guardarEvidenciaLocal(
-        tareaId: String,
-        comentario: String,
-        imagenUri: Uri
-    ): Evidencia {
-        val carpeta = File(getApplication<Application>().filesDir, "evidencias")
-        if (!carpeta.exists() && !carpeta.mkdirs()) {
-            throw IOException("No se pudo crear el directorio de evidencias.")
-        }
-        val archivo = File(carpeta, "${java.util.UUID.randomUUID()}.jpg")
-        val input = getApplication<Application>().contentResolver.openInputStream(imagenUri)
-            ?: throw IOException("No se pudo abrir la fotografía.")
-        var copiaCompleta = false
-        try {
-            input.use { origen ->
-                archivo.outputStream().use { destino -> origen.copyTo(destino) }
-            }
-            copiaCompleta = true
-        } finally {
-            if (!copiaCompleta) archivo.delete()
-        }
-        return Evidencia(
-            id = java.util.UUID.randomUUID().toString(),
-            tareaId = tareaId,
-            tipo = "foto",
-            rutaArchivo = archivo.absolutePath,
-            descripcion = comentario,
-            fechaRegistro = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT)
-                .format(java.util.Date())
-        )
-    }
-
-    private fun cargarEntregasGuardadas() {
-        val json = getApplication<Application>()
-            .getSharedPreferences("entregas_tareas", Context.MODE_PRIVATE)
-            .getString("evidencias", null) ?: return
-        try {
-            val guardadas = JSONArray(json)
-            val evidencias = mutableListOf<Evidencia>()
-            val comentarios = mutableMapOf<String, String>()
-            for (index in 0 until guardadas.length()) {
-                val elemento = guardadas.getJSONObject(index)
-                val evidencia = Evidencia(
-                    id = elemento.getString("id"),
-                    tareaId = elemento.getString("tareaId"),
-                    tipo = elemento.getString("tipo"),
-                    rutaArchivo = elemento.getString("rutaArchivo"),
-                    descripcion = elemento.getString("descripcion"),
-                    fechaRegistro = elemento.getString("fechaRegistro")
-                )
-                if (File(evidencia.rutaArchivo).isFile) {
-                    evidencias.add(evidencia)
-                    comentarios[evidencia.tareaId] = evidencia.descripcion
-                }
-            }
-            evidenciasTareas.value = evidencias
-            comentariosEntrega.value = comentarios
-        } catch (exception: JSONException) {
-            android.util.Log.e("HuertoViewModel", "No se pudieron leer las evidencias guardadas.", exception)
-        }
-    }
-
-    private fun guardarEntregas() {
-        val json = JSONArray()
-        try {
-            evidenciasTareas.value.forEach { evidencia ->
-                json.put(
-                    JSONObject()
-                        .put("id", evidencia.id)
-                        .put("tareaId", evidencia.tareaId)
-                        .put("tipo", evidencia.tipo)
-                        .put("rutaArchivo", evidencia.rutaArchivo)
-                        .put("descripcion", evidencia.descripcion)
-                        .put("fechaRegistro", evidencia.fechaRegistro)
-                )
-            }
-            getApplication<Application>()
-                .getSharedPreferences("entregas_tareas", Context.MODE_PRIVATE)
-                .edit()
-                .putString("evidencias", json.toString())
-                .apply()
-        } catch (exception: JSONException) {
-            android.util.Log.e("HuertoViewModel", "No se pudieron guardar las evidencias.", exception)
-        }
-    }
-
     fun iniciarTarea(tareaId: String): Boolean {
         val usuario = usuarioActual ?: return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         if (!PermisosHuerto.puedeIniciarTarea(usuario.perfil, usuario.id, tarea)) return false
 
-        actualizarTarea(tarea.copy(estado = "En desarrollo", motivoRechazo = ""))
-        registrarActividad(tarea, "Inició la tarea", "En desarrollo")
+        val actualizada = tarea.copy(estado = "En desarrollo", motivoRechazo = "")
+        actualizarTarea(actualizada)
+        val actividad = registrarActividad(actualizada, "Inició la tarea", "En desarrollo")
+        actividad?.let { guardarTareaConActividad(actualizada, it) }
         return true
     }
 
     fun validarTarea(tareaId: String): Boolean {
+        val administrador = usuarioActual ?: return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         if (!PermisosHuerto.puedeValidarTarea(usuarioActual?.perfil, tarea.estado)) return false
-        actualizarEstadoTarea(tareaId, "Completada")
-        registrarActividad(tarea, "Validó la tarea", "Completada")
+        val actualizada = tarea.copy(estado = "Completada")
+        actualizarTarea(actualizada)
+        val validacion = Validacion(
+            id = java.util.UUID.randomUUID().toString(),
+            tareaId = tarea.id,
+            administradorId = administrador.id,
+            resultado = "Validada",
+            fechaValidacion = fechaActualConHora()
+        )
+        val actividad = registrarActividad(actualizada, "Validó la tarea", "Completada")
+        actividad?.let {
+            persistir {
+                huertoRepository.validarTarea(actualizada, validacion, it, administrador)
+            }
+        }
         return true
     }
 
-    fun rechazarTarea(tareaId: String, motivo: String): Boolean {
-        val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
-        if (!PermisosHuerto.puedeRechazarTarea(usuarioActual?.perfil, tarea.estado, motivo)) return false
+    fun rechazarTarea(tareaId: String, motivo: String, onResult: (String?) -> Unit) {
+        val administrador = usuarioActual
+        if (administrador == null) {
+            onResult("Inicia sesión como administrador para rechazar la tarea.")
+            return
+        }
+        if (motivo.isBlank()) {
+            onResult("El motivo del rechazo es obligatorio.")
+            return
+        }
+        val tarea = listaTareas.value.firstOrNull { it.id == tareaId }
+        if (tarea == null ||
+            !PermisosHuerto.puedeRechazarTarea(administrador.perfil, tarea.estado, motivo)
+        ) {
+            onResult("Solo se puede rechazar una tarea pendiente de validación.")
+            return
+        }
 
-        actualizarTarea(
-            tarea.copy(estado = "Rechazada", motivoRechazo = motivo.trim())
+        val actualizada = tarea.copy(estado = "Rechazada", motivoRechazo = motivo.trim())
+        actualizarTarea(actualizada)
+        val validacion = Validacion(
+            id = java.util.UUID.randomUUID().toString(),
+            tareaId = tarea.id,
+            administradorId = administrador.id,
+            resultado = "Rechazada",
+            observaciones = motivo.trim(),
+            fechaValidacion = fechaActualConHora()
         )
-        registrarActividad(tarea, "Rechazó la tarea: ${motivo.trim()}", "Rechazada")
-        return true
+        val actividad = registrarActividad(
+            actualizada,
+            "Rechazó la tarea: ${motivo.trim()}",
+            "Rechazada"
+        )
+        if (actividad == null) {
+            actualizarTarea(tarea)
+            onResult("No se pudo registrar quién rechazó la tarea.")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    huertoRepository.validarTarea(actualizada, validacion, actividad, administrador)
+                }
+                _errorPersistencia.value = null
+                onResult(null)
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo guardar el rechazo de la tarea.", exception)
+                _errorPersistencia.value = "No se pudo guardar el rechazo en la base de datos."
+                refrescarSnapshot()
+                onResult(_errorPersistencia.value)
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo completar el rechazo de la tarea.", exception)
+                _errorPersistencia.value = exception.message ?: "No se pudo guardar el rechazo."
+                refrescarSnapshot()
+                onResult(_errorPersistencia.value)
+            }
+        }
     }
 
     fun crearTarea(
@@ -295,6 +418,9 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
         ) return false
 
+        val actor = usuarioActual ?: return false
+        val estudiante = usuariosDisponibles.value.firstOrNull { it.id == usuarioId } ?: return false
+        val sector = listaSectores.value.firstOrNull { it.id == sectorId } ?: return false
         val tarea = Tarea(
             id = java.util.UUID.randomUUID().toString(),
             titulo = titulo.trim(),
@@ -304,8 +430,16 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             estado = "Pendiente",
             fechaProgramada = fechaProgramada.trim()
         )
-        listaTareas.value = listaTareas.value + tarea
-        registrarActividad(tarea, "Creó y asignó la tarea", "Pendiente", usuarioId)
+        _listaTareas.value = listaTareas.value + tarea
+        val actividad = registrarActividad(
+            tarea,
+            "Creó y asignó la tarea",
+            "Pendiente",
+            usuarioId
+        )
+        actividad?.let {
+            persistir { huertoRepository.crearTarea(tarea, sector, estudiante, actor, it) }
+        }
         return true
     }
 
@@ -337,7 +471,12 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
                 motivoRechazo = ""
             )
         actualizarTarea(tareaActualizada)
-        registrarActividad(tareaActualizada, "Editó la tarea", tareaActualizada.estado)
+            val actividad = registrarActividad(
+                tareaActualizada,
+                "Editó la tarea",
+                tareaActualizada.estado
+            )
+            actividad?.let { guardarTareaConActividad(tareaActualizada, it) }
         return true
     }
 
@@ -377,19 +516,18 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    huertoDatabase.withTransaction {
-                        huertoDatabase.sectorDao().asegurar(sector)
-                        cultivo?.let { huertoDatabase.cultivoDao().asegurar(it) }
-                        huertoDatabase.usuarioDao().asegurar(usuario)
-                        huertoDatabase.reporteProblemaDao().insertar(reporte)
-                    }
+                    huertoRepository.insertarReporte(reporte, sector, cultivo, usuario)
                 }
                 cargarReportesProblema()
-                errorReportesProblemas = null
+                _errorReportesProblemas.value = null
                 onResult(null)
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar el reporte del huerto.", exception)
-                errorReportesProblemas = "No se pudo guardar el reporte en la base de datos."
+                _errorReportesProblemas.value = "No se pudo guardar el reporte en la base de datos."
+                onResult(errorReportesProblemas)
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "El reporte no cumple sus relaciones locales.", exception)
+                _errorReportesProblemas.value = exception.message ?: "No se pudo guardar el reporte."
                 onResult(errorReportesProblemas)
             }
         }
@@ -397,26 +535,24 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun cargarReportesProblema() {
         val usuario = usuarioActual ?: run {
-            reportesProblemas.value = emptyList()
+            _reportesProblemas.value = emptyList()
             return
         }
-        cargandoReportesProblemas = true
+        _cargandoReportesProblemas.value = true
         viewModelScope.launch {
             try {
                 val reportes = withContext(Dispatchers.IO) {
-                    if (esAdministrador) {
-                        huertoDatabase.reporteProblemaDao().obtenerTodos()
-                    } else {
-                        huertoDatabase.reporteProblemaDao().obtenerPorUsuario(usuario.id)
-                    }
+                    huertoRepository.obtenerReportesProblema(
+                        if (esAdministrador) null else usuario.id
+                    )
                 }
-                reportesProblemas.value = reportes
-                errorReportesProblemas = null
+                _reportesProblemas.value = reportes
+                _errorReportesProblemas.value = null
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudieron consultar los reportes del huerto.", exception)
-                errorReportesProblemas = "No se pudieron cargar los reportes de problemas."
+                _errorReportesProblemas.value = "No se pudieron cargar los reportes de problemas."
             } finally {
-                cargandoReportesProblemas = false
+                _cargandoReportesProblemas.value = false
             }
         }
     }
@@ -442,15 +578,17 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    huertoDatabase.reporteProblemaDao().actualizar(
-                        reporte.copy(estado = nuevoEstado)
-                    )
+                    huertoRepository.actualizarReporte(reporte.copy(estado = nuevoEstado))
                 }
                 cargarReportesProblema()
                 onResult(null)
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo actualizar el estado del reporte.", exception)
-                errorReportesProblemas = "No se pudo actualizar el estado del reporte."
+                _errorReportesProblemas.value = "No se pudo actualizar el estado del reporte."
+                onResult(errorReportesProblemas)
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "El reporte no pudo actualizarse.", exception)
+                _errorReportesProblemas.value = exception.message ?: "No se pudo actualizar el reporte."
                 onResult(errorReportesProblemas)
             }
         }
@@ -474,12 +612,14 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
 
     fun agregarSector(nombre: String, descripcion: String): Boolean {
         if (!esAdministrador || nombre.isBlank() || descripcion.isBlank()) return false
-        listaSectores.value = listaSectores.value + Sector(
+        val sector = Sector(
             id = java.util.UUID.randomUUID().toString(),
             nombre = nombre.trim(),
             descripcion = descripcion.trim(),
             estado = "Disponible"
         )
+        _listaSectores.value = listaSectores.value + sector
+        persistir { huertoRepository.guardarSector(sector) }
         return true
     }
 
@@ -493,24 +633,29 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             estado !in setOf("Disponible", "En uso", "Inactivo")
         ) return false
         val sector = listaSectores.value.firstOrNull { it.id == sectorId } ?: return false
-        listaSectores.value = listaSectores.value.map {
-            if (it.id == sectorId) {
-                sector.copy(nombre = nombre.trim(), descripcion = descripcion.trim(), estado = estado)
-            } else {
-                it
-            }
+        val actualizado = sector.copy(
+            nombre = nombre.trim(),
+            descripcion = descripcion.trim(),
+            estado = estado
+        )
+        _listaSectores.value = listaSectores.value.map {
+            if (it.id == sectorId) actualizado else it
         }
+        persistir { huertoRepository.actualizarSector(actualizado) }
         return true
     }
 
     fun eliminarSector(sectorId: String): Boolean {
         if (!esAdministrador ||
             listaCultivos.value.any { it.sectorId == sectorId } ||
-            listaTareas.value.any { it.sectorId == sectorId }
+            listaTareas.value.any { it.sectorId == sectorId } ||
+            reportesProblemas.value.any { it.sectorId == sectorId }
         ) return false
         val sectoresActualizados = listaSectores.value.filterNot { it.id == sectorId }
         if (sectoresActualizados.size == listaSectores.value.size) return false
-        listaSectores.value = sectoresActualizados
+        val sector = listaSectores.value.first { it.id == sectorId }
+        _listaSectores.value = sectoresActualizados
+        persistir { huertoRepository.eliminarSector(sector) }
         return true
     }
 
@@ -525,7 +670,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             listaSectores.value.none { it.id == sectorId }
         ) return false
 
-        listaCultivos.value = listaCultivos.value + Cultivo(
+        val cultivo = Cultivo(
             id = java.util.UUID.randomUUID().toString(),
             nombreComun = nombre.trim(),
             sectorId = sectorId,
@@ -533,6 +678,9 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             estadoDesarrollo = "En crecimiento",
             frecuenciaRiego = frecuenciaRiego.trim()
         )
+        _listaCultivos.value = listaCultivos.value + cultivo
+        val sector = listaSectores.value.first { it.id == sectorId }
+        persistir { huertoRepository.guardarCultivo(cultivo, sector) }
         return true
     }
 
@@ -550,51 +698,44 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             frecuenciaRiego.isBlank()
         ) return false
         val cultivo = listaCultivos.value.firstOrNull { it.id == cultivoId } ?: return false
-        listaCultivos.value = listaCultivos.value.map {
-            if (it.id == cultivoId) {
-                cultivo.copy(
-                    nombreComun = nombre.trim(),
-                    fechaSiembra = fechaSiembra.trim(),
-                    estadoDesarrollo = estadoDesarrollo,
-                    frecuenciaRiego = frecuenciaRiego.trim()
-                )
-            } else {
-                it
-            }
+        val actualizado = cultivo.copy(
+            nombreComun = nombre.trim(),
+            fechaSiembra = fechaSiembra.trim(),
+            estadoDesarrollo = estadoDesarrollo,
+            frecuenciaRiego = frecuenciaRiego.trim()
+        )
+        _listaCultivos.value = listaCultivos.value.map {
+            if (it.id == cultivoId) actualizado else it
         }
+        persistir { huertoRepository.actualizarCultivo(actualizado) }
         return true
     }
 
     fun eliminarCultivo(cultivoId: String): Boolean {
-        if (!esAdministrador) return false
+        if (!esAdministrador || reportesProblemas.value.any { it.cultivoId == cultivoId }) return false
         val cultivosActualizados = listaCultivos.value.filterNot { it.id == cultivoId }
         if (cultivosActualizados.size == listaCultivos.value.size) return false
-        listaCultivos.value = cultivosActualizados
+        val cultivo = listaCultivos.value.first { it.id == cultivoId }
+        _listaCultivos.value = cultivosActualizados
+        persistir { huertoRepository.eliminarCultivo(cultivo) }
         return true
     }
 
     fun cargarUsuariosDisponibles() {
-        if (!esAdministrador) return
         viewModelScope.launch {
             try {
-                usuariosDisponibles.value = withContext(Dispatchers.IO) {
-                    usuarioDatabase.obtenerUsuarios()
-                }
-                errorCargaUsuarios = null
+                val usuarios = withContext(Dispatchers.IO) { huertoRepository.obtenerUsuarios() }
+                _usuariosDisponibles.value = usuarios
+                _errorCargaUsuarios.value = null
             } catch (exception: SQLiteException) {
-                errorCargaUsuarios = "No se pudieron cargar los estudiantes desde la base de datos."
+                _errorCargaUsuarios.value = "No se pudieron cargar los estudiantes desde la base de datos."
+                android.util.Log.e("HuertoViewModel", errorCargaUsuarios!!, exception)
             }
         }
     }
 
-    private fun actualizarEstadoTarea(tareaId: String, estado: String) {
-        listaTareas.value = listaTareas.value.map { tarea ->
-            if (tarea.id == tareaId) tarea.copy(estado = estado) else tarea
-        }
-    }
-
     private fun actualizarTarea(tareaActualizada: Tarea) {
-        listaTareas.value = listaTareas.value.map {
+        _listaTareas.value = listaTareas.value.map {
             if (it.id == tareaActualizada.id) tareaActualizada else it
         }
     }
@@ -604,8 +745,8 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         accion: String,
         estado: String,
         usuarioRelacionadoId: String = tarea.asignadoA
-    ) {
-        val usuario = usuarioActual ?: return
+    ): ActividadTarea? {
+        val usuario = usuarioActual ?: return null
         val actividad = ActividadTarea(
             id = java.util.UUID.randomUUID().toString(),
             tareaId = tarea.id,
@@ -618,72 +759,43 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
             fecha = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
                 .format(java.util.Date())
         )
-        historialActividades.value = (historialActividades.value + actividad)
+        _historialActividades.value = (historialActividades.value + actividad)
             .sortedByDescending { it.fecha }
-        guardarHistorial()
+        return actividad
     }
 
-    private fun cargarHistorial() {
-        val json = getApplication<Application>()
-            .getSharedPreferences("historial_tareas", Context.MODE_PRIVATE)
-            .getString("actividades", null) ?: return
-        try {
-            val elementos = JSONArray(json)
-            historialActividades.value = buildList {
-                for (index in 0 until elementos.length()) {
-                    val elemento = elementos.getJSONObject(index)
-                    add(
-                        ActividadTarea(
-                            id = elemento.getString("id"),
-                            tareaId = elemento.getString("tareaId"),
-                            tituloTarea = elemento.getString("tituloTarea"),
-                            usuarioRelacionadoId = elemento.getString("usuarioRelacionadoId"),
-                            usuarioId = elemento.getString("usuarioId"),
-                            nombreUsuario = elemento.getString("nombreUsuario"),
-                            accion = elemento.getString("accion"),
-                            estado = elemento.getString("estado"),
-                            fecha = elemento.getString("fecha")
-                        )
-                    )
-                }
-            }.sortedByDescending { it.fecha }
-        } catch (exception: JSONException) {
-            android.util.Log.e(
-                "HuertoViewModel",
-                "No se pudo leer el historial de actividades.",
-                exception
-            )
+    private fun guardarTareaConActividad(tarea: Tarea, actividad: ActividadTarea) {
+        val sector = listaSectores.value.firstOrNull { it.id == tarea.sectorId } ?: run {
+            _errorPersistencia.value = "No se encontró el sector asociado a la tarea."
+            return
         }
+        val actor = usuarioActual ?: return
+        val estudiante = usuariosDisponibles.value.firstOrNull { it.id == tarea.asignadoA }
+            ?: actor.takeIf { it.id == tarea.asignadoA }
+            ?: run {
+                _errorPersistencia.value = "No se encontró al responsable de la tarea."
+                return
+            }
+        persistir { huertoRepository.actualizarTarea(tarea, sector, estudiante, actor, actividad) }
     }
 
-    private fun guardarHistorial() {
-        try {
-            val elementos = JSONArray()
-            historialActividades.value.forEach { actividad ->
-                elementos.put(
-                    JSONObject()
-                        .put("id", actividad.id)
-                        .put("tareaId", actividad.tareaId)
-                        .put("tituloTarea", actividad.tituloTarea)
-                        .put("usuarioRelacionadoId", actividad.usuarioRelacionadoId)
-                        .put("usuarioId", actividad.usuarioId)
-                        .put("nombreUsuario", actividad.nombreUsuario)
-                        .put("accion", actividad.accion)
-                        .put("estado", actividad.estado)
-                        .put("fecha", actividad.fecha)
-                )
+    private fun fechaActualConHora(): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(java.util.Date())
+
+    private fun persistir(operacion: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { operacion() }
+                _errorPersistencia.value = null
+            } catch (exception: SQLiteException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo persistir un cambio del huerto.", exception)
+                _errorPersistencia.value = "No se pudo guardar el cambio en la base de datos."
+                refrescarSnapshot()
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo completar la operación del huerto.", exception)
+                _errorPersistencia.value = exception.message ?: "No se pudo guardar el cambio."
+                refrescarSnapshot()
             }
-            getApplication<Application>()
-                .getSharedPreferences("historial_tareas", Context.MODE_PRIVATE)
-                .edit()
-                .putString("actividades", elementos.toString())
-                .apply()
-        } catch (exception: JSONException) {
-            android.util.Log.e(
-                "HuertoViewModel",
-                "No se pudo guardar el historial de actividades.",
-                exception
-            )
         }
     }
 
@@ -695,16 +807,19 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val resultado = try {
                 withContext(Dispatchers.IO) {
-                    usuarioDatabase.autenticar(correo, password)
+                    huertoRepository.autenticar(correo, password)
                 }?.let { ResultadoInicioSesion.Exito(it) } ?: ResultadoInicioSesion.CredencialesInvalidas
             } catch (exception: SQLiteException) {
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
+            } catch (exception: IllegalArgumentException) {
+                android.util.Log.e("HuertoViewModel", "Las credenciales guardadas no tienen un formato válido.", exception)
+                ResultadoInicioSesion.ErrorDeBaseDeDatos
             }
 
             if (resultado is ResultadoInicioSesion.Exito) {
-                usuarioActual = resultado.usuario
+                _usuarioActual.value = resultado.usuario
             }
             onResult(resultado)
         }
@@ -720,7 +835,22 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val resultado = try {
                 withContext(Dispatchers.IO) {
-                    usuarioDatabase.registrar(nombre, apellido, correo, password)
+                    val salt = PasswordHasher.createSalt()
+                    huertoRepository.registrarUsuario(
+                        Usuario(
+                            id = java.util.UUID.randomUUID().toString(),
+                            nombre = nombre.trim(),
+                            correo = correo.trim().lowercase(Locale.ROOT),
+                            perfil = "estudiante",
+                            tallerAsignado = "General",
+                            apellido = apellido.trim(),
+                            passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
+                            passwordHash = Base64.encodeToString(
+                                PasswordHasher.hash(password, salt),
+                                Base64.NO_WRAP
+                            )
+                        )
+                    )
                 }
                 ResultadoRegistro.Exito
             } catch (exception: SQLiteConstraintException) {
@@ -735,19 +865,14 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun actualizarFotoPerfil(uri: Uri?) {
-        fotoPerfilUri = uri
+        _fotoPerfilUri.value = uri
     }
 
     fun cerrarSesion() {
-        usuarioActual = null
-        fotoPerfilUri = null
-        usuariosDisponibles.value = emptyList()
-        errorCargaUsuarios = null
-    }
-
-    override fun onCleared() {
-        usuarioDatabase.close()
-        super.onCleared()
+        _usuarioActual.value = null
+        _fotoPerfilUri.value = null
+        _usuariosDisponibles.value = emptyList()
+        _errorCargaUsuarios.value = null
     }
 
     sealed interface ResultadoInicioSesion {

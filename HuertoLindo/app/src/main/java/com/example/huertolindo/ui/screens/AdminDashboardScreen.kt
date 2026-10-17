@@ -32,6 +32,7 @@ fun AdminDashboardScreen(
     onProblemsClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {}
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -44,11 +45,17 @@ fun AdminDashboardScreen(
         Text("Panel de administración", style = MaterialTheme.typography.headlineMedium)
         Text("Rol asignado: Administrador", style = MaterialTheme.typography.labelLarge)
         Text(
-            "Hola, ${viewModel.usuarioActual?.nombre ?: "Administrador"}",
+            "Hola, ${uiState.usuarioActual?.nombre ?: "Administrador"}",
             style = MaterialTheme.typography.titleLarge
         )
+        if (uiState.cargandoDatos) {
+            androidx.compose.material3.CircularProgressIndicator()
+        }
+        uiState.errorPersistencia?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
         Text(
-            "${viewModel.listaSectores.value.size} sectores · ${viewModel.listaCultivos.value.size} cultivos · " +
+            "${uiState.sectores.size} sectores · ${uiState.cultivos.size} cultivos · " +
                 "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas pendientes",
             style = MaterialTheme.typography.bodyLarge
         )

@@ -36,6 +36,7 @@ fun RegistroScreen(
     onBackToLogin: () -> Unit,
     onRegistrationSuccess: () -> Unit
 ) {
+    collectHuertoUiState(viewModel)
     var nombre by remember { mutableStateOf("") }
     var apellido by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }

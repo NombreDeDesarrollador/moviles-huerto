@@ -9,7 +9,7 @@ import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.data.security.PasswordHasher
 import java.util.Locale
 
-class UsuarioDatabaseHelper(context: Context) :
+class LegacyUsuarioImporter(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -59,61 +59,10 @@ class UsuarioDatabaseHelper(context: Context) :
         }
     }
 
-    fun autenticar(correo: String, password: String): Usuario? {
-        val correoNormalizado = correo.trim().lowercase(Locale.ROOT)
-        val usuario: Usuario
-        val passwordGuardada: String
-        val saltGuardada: String
-        val hashGuardado: String
+    fun importarUsuarios(): List<Usuario> =
         readableDatabase.query(
             TABLE_USERS,
             arrayOf("id", "correo", "nombre", "apellido", "perfil", "taller_asignado", "password", "password_salt", "password_hash"),
-            "correo = ?",
-            arrayOf(correoNormalizado),
-            null,
-            null,
-            null
-        ).use { cursor ->
-            if (!cursor.moveToFirst()) return null
-
-            usuario = Usuario(
-                id = cursor.getString(0),
-                correo = cursor.getString(1),
-                nombre = cursor.getString(2),
-                apellido = cursor.getString(3),
-                perfil = cursor.getString(4),
-                tallerAsignado = cursor.getString(5)
-            )
-            passwordGuardada = cursor.getString(6)
-            saltGuardada = cursor.getString(7)
-            hashGuardado = cursor.getString(8)
-        }
-
-        if (passwordGuardada.isNotEmpty()) {
-            return usuario.takeIf { password == passwordGuardada }
-        }
-
-        if (!PasswordHasher.verify(password, decode(saltGuardada), decode(hashGuardado))) {
-            return null
-        }
-
-        writableDatabase.update(
-            TABLE_USERS,
-            ContentValues().apply {
-                put("password", password)
-                put("password_salt", "")
-                put("password_hash", "")
-            },
-            "id = ?",
-            arrayOf(usuario.id)
-        )
-        return usuario
-    }
-
-    fun obtenerUsuarios(): List<Usuario> =
-        readableDatabase.query(
-            TABLE_USERS,
-            arrayOf("id", "correo", "nombre", "apellido", "perfil", "taller_asignado"),
             null,
             null,
             null,
@@ -122,36 +71,40 @@ class UsuarioDatabaseHelper(context: Context) :
         ).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
+                    val password = cursor.getString(6)
+                    val (salt, hash) = if (password.isNotEmpty()) {
+                        val generatedSalt = PasswordHasher.createSalt()
+                        generatedSalt to PasswordHasher.hash(password, generatedSalt)
+                    } else {
+                        decode(cursor.getString(7)) to decode(cursor.getString(8))
+                    }
                     add(
                         Usuario(
                             id = cursor.getString(0),
-                            correo = cursor.getString(1),
+                            correo = cursor.getString(1).trim().lowercase(Locale.ROOT),
                             nombre = cursor.getString(2),
                             apellido = cursor.getString(3),
                             perfil = cursor.getString(4),
-                            tallerAsignado = cursor.getString(5)
+                            tallerAsignado = cursor.getString(5),
+                            passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
+                            passwordHash = Base64.encodeToString(hash, Base64.NO_WRAP)
                         )
                     )
                 }
             }
         }
 
-    fun registrar(nombre: String, apellido: String, correo: String, password: String) {
-        val values = ContentValues().apply {
-            put("id", java.util.UUID.randomUUID().toString())
-            put("correo", correo.trim().lowercase(Locale.ROOT))
-            put("nombre", nombre.trim())
-            put("apellido", apellido.trim())
-            put("perfil", "estudiante")
-            put("taller_asignado", "General")
-            put("password", password)
-            put("password_salt", "")
-            put("password_hash", "")
-        }
-        writableDatabase.insertOrThrow(TABLE_USERS, null, values)
+    fun eliminarContrasenasEnClaro() {
+        writableDatabase.update(
+            TABLE_USERS,
+            ContentValues().apply { put("password", "") },
+            "password != ''",
+            null
+        )
     }
 
-    private fun decode(value: String): ByteArray = Base64.decode(value, Base64.NO_WRAP)
+    private fun decode(value: String): ByteArray =
+        if (value.isBlank()) ByteArray(0) else Base64.decode(value, Base64.NO_WRAP)
 
     private data class CuentaInicial(
         val id: String,

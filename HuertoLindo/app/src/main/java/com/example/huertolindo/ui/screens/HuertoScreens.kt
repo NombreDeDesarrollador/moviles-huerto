@@ -26,6 +26,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,11 @@ import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.viewmodel.HuertoViewModel
+import com.example.huertolindo.viewmodel.HuertoUiState
+
+@Composable
+internal fun collectHuertoUiState(viewModel: HuertoViewModel): HuertoUiState =
+    viewModel.uiState.collectAsState().value
 
 @Composable
 fun SectoresScreen(
@@ -49,11 +55,13 @@ fun SectoresScreen(
     onBack: () -> Unit,
     onSectorClick: (String) -> Unit
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var sectorEnEdicion by remember { mutableStateOf<Sector?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     ScreenLayout("Sectores del huerto", onBack) {
+        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (esAdministrador) {
             Button(onClick = {
                 sectorEnEdicion = null
@@ -61,10 +69,10 @@ fun SectoresScreen(
             }) { Text("Agregar sector") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-        if (viewModel.listaSectores.value.isEmpty()) {
+        if (uiState.sectores.isEmpty()) {
             Text("Todavía no hay sectores registrados.")
         }
-        viewModel.listaSectores.value.forEach { sector ->
+        uiState.sectores.forEach { sector ->
             ElevatedCard(
                 onClick = { onSectorClick(sector.id) },
                 modifier = Modifier.fillMaxWidth()
@@ -73,7 +81,7 @@ fun SectoresScreen(
                     Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
                     Text(sector.descripcion)
                     Text("Estado: ${sector.estado}")
-                    Text("${viewModel.listaCultivos.value.count { it.sectorId == sector.id }} cultivos")
+                    Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
                             sectorEnEdicion = sector
@@ -81,7 +89,7 @@ fun SectoresScreen(
                         }) { Text("Editar sector") }
                         OutlinedButton(onClick = {
                             error = if (viewModel.eliminarSector(sector.id)) null
-                            else "No se puede eliminar un sector que tiene cultivos o tareas."
+                                else "No se puede eliminar un sector asociado a cultivos, tareas o reportes."
                         }) { Text("Eliminar sector") }
                     }
                 }
@@ -119,12 +127,14 @@ fun DetalleSectorScreen(
     onBack: () -> Unit,
     onCultivoClick: (String) -> Unit
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var cultivoEnEdicion by remember { mutableStateOf<Cultivo?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val sector = viewModel.listaSectores.value.firstOrNull { it.id == sectorId }
+    val sector = uiState.sectores.firstOrNull { it.id == sectorId }
     ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack) {
+        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (sector == null) {
             Text("El sector seleccionado ya no está disponible.")
             return@ScreenLayout
@@ -139,7 +149,7 @@ fun DetalleSectorScreen(
             }) { Text("Agregar cultivo") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-        val cultivos = viewModel.listaCultivos.value.filter { it.sectorId == sector.id }
+        val cultivos = uiState.cultivos.filter { it.sectorId == sector.id }
         if (cultivos.isEmpty()) Text("Este sector todavía no tiene cultivos.")
         cultivos.forEach { cultivo ->
             ElevatedCard(
@@ -189,13 +199,14 @@ fun DetalleSectorScreen(
 
 @Composable
 fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: () -> Unit) {
-    val cultivo = viewModel.listaCultivos.value.firstOrNull { it.id == cultivoId }
+    val uiState = collectHuertoUiState(viewModel)
+    val cultivo = uiState.cultivos.firstOrNull { it.id == cultivoId }
     ScreenLayout(cultivo?.nombreComun ?: "Cultivo no encontrado", onBack) {
         if (cultivo == null) {
             Text("El cultivo seleccionado ya no está disponible.")
             return@ScreenLayout
         }
-        val sector = viewModel.listaSectores.value.firstOrNull { it.id == cultivo.sectorId }
+        val sector = uiState.sectores.firstOrNull { it.id == cultivo.sectorId }
         Text("Sector: ${sector?.nombre ?: "Sin sector"}")
         Text("Fecha de siembra: ${cultivo.fechaSiembra}")
         Text("Estado de desarrollo: ${cultivo.estadoDesarrollo}")
@@ -209,12 +220,18 @@ fun TareasScreen(
     onBack: () -> Unit,
     onTaskClick: (String) -> Unit
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
     var tareaEnEdicion by remember { mutableStateOf<Tarea?>(null) }
     var estadoFiltro by remember { mutableStateOf("") }
     var fechaFiltro by remember { mutableStateOf("") }
     var responsableFiltro by remember { mutableStateOf("") }
+    var tareaParaRechazar by remember { mutableStateOf<Tarea?>(null) }
+    var motivoRechazo by remember { mutableStateOf("") }
+    var errorMotivoRechazo by remember { mutableStateOf(false) }
+    var enviandoRechazo by remember { mutableStateOf(false) }
+    var errorOperacionRechazo by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val tareas = viewModel.tareasVisibles
     val tareasFiltradas = tareas.filter { tarea ->
@@ -223,12 +240,13 @@ fun TareasScreen(
             (responsableFiltro.isBlank() || tarea.asignadoA == responsableFiltro)
     }
     ScreenLayout("Tareas del huerto", onBack) {
+        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (esAdministrador) {
             Button(onClick = {
                 tareaEnEdicion = null
                 mostrarFormulario = true
             }) { Text("Crear y asignar tarea") }
-            viewModel.errorCargaUsuarios?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            uiState.errorCargaUsuarios?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         if (viewModel.tareasAtrasadas.isNotEmpty()) {
@@ -272,7 +290,7 @@ fun TareasScreen(
             CampoSeleccion(
                 etiqueta = "Responsable",
                 opciones = listOf("" to "Todos los responsables") +
-                    viewModel.usuariosDisponibles.value
+                    uiState.usuariosDisponibles
                         .filter { it.perfil == "estudiante" }
                         .map { it.id to it.nombreCompleto },
                 seleccionado = responsableFiltro,
@@ -311,14 +329,22 @@ fun TareasScreen(
                             mostrarFormulario = true
                         }) { Text("Editar tarea") }
                     }
+                    if (esAdministrador && tarea.estado == "Por validar") {
+                        OutlinedButton(onClick = {
+                            tareaParaRechazar = tarea
+                            motivoRechazo = ""
+                            errorMotivoRechazo = false
+                            errorOperacionRechazo = null
+                        }) { Text("Rechazar tarea") }
+                    }
                 }
             }
         }
     }
     if (mostrarFormulario) {
         FormularioTarea(
-            sectores = viewModel.listaSectores.value,
-            estudiantes = viewModel.usuariosDisponibles.value.filter { it.perfil == "estudiante" },
+            sectores = uiState.sectores,
+            estudiantes = uiState.usuariosDisponibles.filter { it.perfil == "estudiante" },
             tarea = tareaEnEdicion,
             onDismiss = {
                 mostrarFormulario = false
@@ -343,6 +369,66 @@ fun TareasScreen(
             }
         )
     }
+    tareaParaRechazar?.let { tarea ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!enviandoRechazo) tareaParaRechazar = null
+            },
+            title = { Text("Rechazar tarea") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Indica al estudiante qué debe corregir.")
+                    errorOperacionRechazo?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                    OutlinedTextField(
+                        value = motivoRechazo,
+                        onValueChange = {
+                            motivoRechazo = it
+                            errorMotivoRechazo = false
+                        },
+                        label = { Text("Motivo del rechazo") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        isError = errorMotivoRechazo || (errorOperacionRechazo != null && motivoRechazo.isBlank()),
+                        supportingText = {
+                            if (errorMotivoRechazo) {
+                                Text("El motivo es obligatorio.")
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (motivoRechazo.isBlank()) {
+                        errorMotivoRechazo = true
+                    } else {
+                        enviandoRechazo = true
+                        errorOperacionRechazo = null
+                        viewModel.rechazarTarea(tarea.id, motivoRechazo) { resultado ->
+                            enviandoRechazo = false
+                            if (resultado == null) {
+                                tareaParaRechazar = null
+                                motivoRechazo = ""
+                                error = null
+                            } else {
+                                errorOperacionRechazo = resultado
+                            }
+                        }
+                    }
+                }, enabled = !enviandoRechazo) {
+                    Text(if (enviandoRechazo) "Guardando..." else "Confirmar rechazo")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { tareaParaRechazar = null },
+                    enabled = !enviandoRechazo
+                ) { Text("Cancelar") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -351,10 +437,12 @@ fun DetalleTareaScreen(
     tareaId: String,
     onBack: () -> Unit
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     val tarea = viewModel.tareasVisibles.firstOrNull { it.id == tareaId }
     var mostrarDialogoRechazo by remember { mutableStateOf(false) }
     var motivoRechazo by remember { mutableStateOf("") }
-    var errorRechazo by remember { mutableStateOf(false) }
+    var errorRechazo by remember { mutableStateOf<String?>(null) }
+    var enviandoRechazo by remember { mutableStateOf(false) }
     var comentarioEntrega by remember(tareaId) { mutableStateOf("") }
     var imagenEntrega by remember(tareaId) { mutableStateOf<Uri?>(null) }
     var uriCamaraPendiente by remember(tareaId) { mutableStateOf<Uri?>(null) }
@@ -376,12 +464,13 @@ fun DetalleTareaScreen(
     }
     val evidencias = viewModel.evidenciasDeTarea(tareaId)
     ScreenLayout(tarea?.titulo ?: "Tarea no encontrada", onBack) {
+        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (tarea == null) {
             Text("La tarea seleccionada ya no está disponible.")
             return@ScreenLayout
         }
-        val sector = viewModel.listaSectores.value.firstOrNull { it.id == tarea.sectorId }
-        val estudiante = viewModel.usuariosDisponibles.value.firstOrNull { it.id == tarea.asignadoA }
+        val sector = uiState.sectores.firstOrNull { it.id == tarea.sectorId }
+        val estudiante = uiState.usuariosDisponibles.firstOrNull { it.id == tarea.asignadoA }
         Text("Instrucciones", style = MaterialTheme.typography.titleMedium)
         Text(tarea.descripcion, style = MaterialTheme.typography.bodyLarge)
         Text("Estado: ${tarea.estado}", style = MaterialTheme.typography.bodyLarge)
@@ -399,7 +488,7 @@ fun DetalleTareaScreen(
         Text("Asignada a: ${estudiante?.nombreCompleto ?: tarea.asignadoA}")
         if (evidencias.isNotEmpty()) {
             Text("Comentario de entrega", style = MaterialTheme.typography.titleMedium)
-            Text(viewModel.comentariosEntrega.value[tarea.id].orEmpty())
+            Text(uiState.comentariosEntrega[tarea.id].orEmpty())
             Text("Evidencias", style = MaterialTheme.typography.titleMedium)
             evidencias.forEach { evidencia ->
                 AsyncImage(
@@ -413,13 +502,23 @@ fun DetalleTareaScreen(
                 Text("Adjuntada: ${evidencia.fechaRegistro}")
             }
         }
+        val validaciones = uiState.validaciones.filter { it.tareaId == tarea.id }
+        if (validaciones.isNotEmpty()) {
+            Text("Historial de validación", style = MaterialTheme.typography.titleMedium)
+            validaciones.forEach { validacion ->
+                Text("${validacion.resultado} · ${validacion.fechaValidacion}")
+                if (validacion.observaciones.isNotBlank()) {
+                    Text("Observaciones: ${validacion.observaciones}")
+                }
+            }
+        }
         if (viewModel.esAdministrador && tarea.estado == "Por validar") {
             Button(onClick = { viewModel.validarTarea(tarea.id) }) {
                 Text("Validar actividad")
             }
             OutlinedButton(onClick = {
                 motivoRechazo = ""
-                errorRechazo = false
+                errorRechazo = null
                 mostrarDialogoRechazo = true
             }) { Text("Rechazar actividad") }
         } else if (!viewModel.esAdministrador && tarea.estado in setOf("Pendiente", "Rechazada")) {
@@ -497,7 +596,9 @@ fun DetalleTareaScreen(
     }
     if (mostrarDialogoRechazo && tarea != null) {
         AlertDialog(
-            onDismissRequest = { mostrarDialogoRechazo = false },
+            onDismissRequest = {
+                if (!enviandoRechazo) mostrarDialogoRechazo = false
+            },
             title = { Text("Rechazar actividad") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -506,27 +607,41 @@ fun DetalleTareaScreen(
                         value = motivoRechazo,
                         onValueChange = {
                             motivoRechazo = it
-                            errorRechazo = false
+                            errorRechazo = null
                         },
                         label = { Text("Motivo del rechazo") },
-                        isError = errorRechazo,
+                        isError = errorRechazo != null,
                         supportingText = {
-                            if (errorRechazo) Text("El motivo es obligatorio.")
+                            errorRechazo?.let { Text(it) }
                         }
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (viewModel.rechazarTarea(tarea.id, motivoRechazo)) {
-                        mostrarDialogoRechazo = false
+                    if (motivoRechazo.isBlank()) {
+                        errorRechazo = "El motivo del rechazo es obligatorio."
                     } else {
-                        errorRechazo = true
+                        enviandoRechazo = true
+                        errorRechazo = null
+                        viewModel.rechazarTarea(tarea.id, motivoRechazo) { resultado ->
+                            enviandoRechazo = false
+                            if (resultado == null) {
+                                mostrarDialogoRechazo = false
+                            } else {
+                                errorRechazo = resultado
+                            }
+                        }
                     }
-                }) { Text("Rechazar") }
+                }, enabled = !enviandoRechazo) {
+                    Text(if (enviandoRechazo) "Guardando..." else "Rechazar")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoRechazo = false }) { Text("Cancelar") }
+                TextButton(
+                    onClick = { mostrarDialogoRechazo = false },
+                    enabled = !enviandoRechazo
+                ) { Text("Cancelar") }
             }
         )
     }
@@ -534,9 +649,10 @@ fun DetalleTareaScreen(
 
 @Composable
 fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
     ScreenLayout("Sensores del huerto", onBack) {
         Text("Lecturas de demostración; no corresponden a sensores físicos.")
-        viewModel.listaSectores.value.forEach { sector ->
+        uiState.sectores.forEach { sector ->
             val lectura = if (sector.id == "1") {
                 SensorSimulado(sector.id, 62.0, 21.5, 54.0)
             } else {
@@ -557,13 +673,14 @@ fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
 @Composable
 fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
     val tareas = viewModel.tareasVisibles
     ScreenLayout("Resumen del huerto", onBack) {
         if (!viewModel.esAdministrador) {
             Text("No tienes permiso para consultar este resumen.")
         } else {
-            ReporteDato("Sectores", viewModel.listaSectores.value.size.toString())
-            ReporteDato("Cultivos activos", viewModel.listaCultivos.value.size.toString())
+            ReporteDato("Sectores", uiState.sectores.size.toString())
+            ReporteDato("Cultivos activos", uiState.cultivos.size.toString())
             ReporteDato("Tareas completadas", tareas.count { it.estado == "Completada" }.toString())
             ReporteDato("Tareas pendientes", tareas.count { it.estado != "Completada" }.toString())
             Text(
@@ -576,6 +693,7 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
 @Composable
 fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    collectHuertoUiState(viewModel)
     ScreenLayout("Historial de actividades", onBack) {
         val actividades = viewModel.historialVisible
         if (actividades.isEmpty()) {
@@ -600,6 +718,7 @@ fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
 @Composable
 fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
     var mostrarFormulario by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -612,16 +731,21 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
             mostrarFormulario = true
         }) { Text("Registrar problema") }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        viewModel.errorReportesProblemas?.let {
+        uiState.errorReportesProblemas?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
         }
-        if (viewModel.cargandoReportesProblemas) {
+        if (uiState.cargandoReportesProblemas) {
             androidx.compose.material3.CircularProgressIndicator()
         }
 
-        val reportes = viewModel.reportesProblemasVisibles
-        if (reportes.isEmpty() && !viewModel.cargandoReportesProblemas &&
-            viewModel.errorReportesProblemas == null
+        val reportes = if (viewModel.esAdministrador) {
+            uiState.reportesProblemas
+        } else {
+            val usuarioId = uiState.usuarioActual?.id
+            uiState.reportesProblemas.filter { it.usuarioId == usuarioId }
+        }
+        if (reportes.isEmpty() && !uiState.cargandoReportesProblemas &&
+            uiState.errorReportesProblemas == null
         ) {
             Text(
                 if (viewModel.esAdministrador) "No hay problemas reportados."
@@ -629,11 +753,11 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
             )
         }
         reportes.forEach { reporte ->
-            val sector = viewModel.listaSectores.value.firstOrNull { it.id == reporte.sectorId }
-            val cultivo = viewModel.listaCultivos.value.firstOrNull { it.id == reporte.cultivoId }
-            val reportante = viewModel.usuariosDisponibles.value
+            val sector = uiState.sectores.firstOrNull { it.id == reporte.sectorId }
+            val cultivo = uiState.cultivos.firstOrNull { it.id == reporte.cultivoId }
+            val reportante = uiState.usuariosDisponibles
                 .firstOrNull { it.id == reporte.usuarioId }
-                ?: viewModel.usuarioActual?.takeIf { it.id == reporte.usuarioId }
+                ?: uiState.usuarioActual?.takeIf { it.id == reporte.usuarioId }
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(16.dp),
@@ -669,8 +793,8 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
     if (mostrarFormulario) {
         FormularioReporteProblema(
-            sectores = viewModel.listaSectores.value,
-            cultivos = viewModel.listaCultivos.value,
+            sectores = uiState.sectores,
+            cultivos = uiState.cultivos,
             onDismiss = { mostrarFormulario = false },
             onSave = { descripcion, sectorId, cultivoId, prioridad, onResult ->
                 viewModel.crearReporteProblema(

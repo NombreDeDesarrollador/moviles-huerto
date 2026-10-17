@@ -28,6 +28,7 @@ fun EstudianteDashboardScreen(
     onProblemsClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {}
 ) {
+    val uiState = collectHuertoUiState(viewModel)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -40,9 +41,15 @@ fun EstudianteDashboardScreen(
         Text("Mi huerto", style = MaterialTheme.typography.headlineMedium)
         Text("Rol asignado: Estudiante", style = MaterialTheme.typography.labelLarge)
         Text(
-            "Hola, ${viewModel.usuarioActual?.nombre ?: "Estudiante"}",
+            "Hola, ${uiState.usuarioActual?.nombre ?: "Estudiante"}",
             style = MaterialTheme.typography.titleLarge
         )
+        if (uiState.cargandoDatos) {
+            androidx.compose.material3.CircularProgressIndicator()
+        }
+        uiState.errorPersistencia?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
         Text(
             "Tienes ${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas asignadas por realizar.",
             style = MaterialTheme.typography.bodyLarge

@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val huertoState by huertoViewModel.uiState.collectAsState()
                     var pantallaActual by remember { mutableStateOf("login") }
                     var mensajeRegistro by remember { mutableStateOf<String?>(null) }
                     var sectorSeleccionado by remember { mutableStateOf("") }
@@ -53,12 +54,13 @@ class MainActivity : ComponentActivity() {
 
                     when {
                         pantallaActual !in setOf("login", "registro") &&
-                            huertoViewModel.usuarioActual == null -> {
+                            huertoState.usuarioActual == null -> {
                             TextButton(onClick = { pantallaActual = "login" }) {
                                 Text("Sesión no iniciada · Volver al inicio")
                             }
                         }
-                        pantallaActual == "reportes" && !huertoViewModel.esAdministrador -> {
+                        pantallaActual == "reportes" &&
+                            huertoState.usuarioActual?.perfil != "administrador" -> {
                             TextButton(onClick = { pantallaActual = "menu" }) {
                                 Text("Acceso no autorizado · Volver")
                             }
@@ -74,9 +76,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onLoginSuccess = {
                                     huertoViewModel.cargarReportesProblema()
-                                    if (huertoViewModel.esAdministrador) {
-                                        huertoViewModel.cargarUsuariosDisponibles()
-                                    }
+                                    huertoViewModel.cargarUsuariosDisponibles()
                                     pantallaActual = "menu"
                                 }
                             )
@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         "menu" -> {
-                            if (huertoViewModel.esAdministrador) {
+                            if (huertoState.usuarioActual?.perfil == "administrador") {
                                 AdminDashboardScreen(
                                     viewModel = huertoViewModel,
                                     onProfileClick = { pantallaActual = "perfil" },
