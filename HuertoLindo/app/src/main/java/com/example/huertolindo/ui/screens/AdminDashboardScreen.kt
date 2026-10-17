@@ -2,6 +2,7 @@ package com.example.huertolindo.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,9 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -48,8 +52,11 @@ fun AdminDashboardScreen(
             "Hola, ${uiState.usuarioActual?.nombre ?: "Administrador"}",
             style = MaterialTheme.typography.titleLarge
         )
-        if (uiState.cargandoDatos) {
-            androidx.compose.material3.CircularProgressIndicator()
+        AnimatedVisibility(uiState.cargandoDatos) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator()
+                Text("Cargando información del huerto")
+            }
         }
         uiState.errorPersistencia?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
@@ -59,10 +66,12 @@ fun AdminDashboardScreen(
                 "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas pendientes",
             style = MaterialTheme.typography.bodyLarge
         )
-        if (viewModel.tareasAtrasadas.isNotEmpty()) {
+        AnimatedVisibility(viewModel.tareasAtrasadas.isNotEmpty()) {
             ElevatedCard(
                 onClick = onTasksClick,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -88,7 +97,12 @@ fun AdminDashboardScreen(
 
 @Composable
 internal fun DashboardAction(title: String, description: String, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    ElevatedCard(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize()
+    ) {
         Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(description, style = MaterialTheme.typography.bodyMedium)

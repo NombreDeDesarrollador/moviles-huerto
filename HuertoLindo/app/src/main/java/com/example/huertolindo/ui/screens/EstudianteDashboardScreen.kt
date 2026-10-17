@@ -2,6 +2,7 @@ package com.example.huertolindo.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,8 +47,11 @@ fun EstudianteDashboardScreen(
             "Hola, ${uiState.usuarioActual?.nombre ?: "Estudiante"}",
             style = MaterialTheme.typography.titleLarge
         )
-        if (uiState.cargandoDatos) {
-            androidx.compose.material3.CircularProgressIndicator()
+        AnimatedVisibility(uiState.cargandoDatos) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator()
+                Text("Cargando información del huerto")
+            }
         }
         uiState.errorPersistencia?.let {
             Text(it, color = MaterialTheme.colorScheme.error)

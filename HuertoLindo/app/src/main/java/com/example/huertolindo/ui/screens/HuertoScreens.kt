@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -45,6 +48,7 @@ import com.example.huertolindo.data.model.Sector
 import com.example.huertolindo.data.model.Tarea
 import com.example.huertolindo.data.model.TipoAsociacionEvidencia
 import com.example.huertolindo.data.model.Usuario
+import com.example.huertolindo.ui.HuertoStatusChip
 import com.example.huertolindo.viewmodel.HuertoViewModel
 import com.example.huertolindo.viewmodel.HuertoUiState
 
@@ -83,7 +87,7 @@ fun SectoresScreen(
                 Column(Modifier.padding(16.dp)) {
                     Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
                     Text(sector.descripcion)
-                    Text("Estado: ${sector.estado}")
+                    HuertoStatusChip(sector.estado)
                     Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
@@ -143,7 +147,10 @@ fun DetalleSectorScreen(
             return@ScreenLayout
         }
         Text(sector.descripcion, style = MaterialTheme.typography.bodyLarge)
-        Text("Estado: ${sector.estado}", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Estado:", style = MaterialTheme.typography.bodyLarge)
+            HuertoStatusChip(sector.estado)
+        }
         Text("Cultivos", style = MaterialTheme.typography.titleLarge)
         if (esAdministrador) {
             Button(onClick = {
@@ -161,7 +168,10 @@ fun DetalleSectorScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
-                    Text("Desarrollo: ${cultivo.estadoDesarrollo}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Desarrollo:")
+                        HuertoStatusChip(cultivo.estadoDesarrollo)
+                    }
                     Text("Siembra: ${cultivo.fechaSiembra}")
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
@@ -212,7 +222,10 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
         val sector = uiState.sectores.firstOrNull { it.id == cultivo.sectorId }
         Text("Sector: ${sector?.nombre ?: "Sin sector"}")
         Text("Fecha de siembra: ${cultivo.fechaSiembra}")
-        Text("Estado de desarrollo: ${cultivo.estadoDesarrollo}")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Estado de desarrollo:")
+            HuertoStatusChip(cultivo.estadoDesarrollo)
+        }
         Text("Frecuencia de riego: ${cultivo.frecuenciaRiego}")
         EvidenciaFotograficaSection(
             titulo = "Registro fotográfico del cultivo",
@@ -336,10 +349,10 @@ fun TareasScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(tarea.titulo, style = MaterialTheme.typography.titleMedium)
-                    Text("Estado: ${tarea.estado}")
+                    HuertoStatusChip(tarea.estado)
                     Text("Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}")
                     if (viewModel.tareasAtrasadas.any { it.id == tarea.id }) {
-                        Text("ATRASADA", color = MaterialTheme.colorScheme.error)
+                        HuertoStatusChip("Atrasada")
                     }
                     if (esAdministrador && tarea.estado != "Completada") {
                         OutlinedButton(onClick = {
@@ -496,7 +509,10 @@ fun DetalleTareaScreen(
         val estudiante = uiState.usuariosDisponibles.firstOrNull { it.id == tarea.asignadoA }
         Text("Instrucciones", style = MaterialTheme.typography.titleMedium)
         Text(tarea.descripcion, style = MaterialTheme.typography.bodyLarge)
-        Text("Estado: ${tarea.estado}", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Estado:", style = MaterialTheme.typography.bodyLarge)
+            HuertoStatusChip(tarea.estado)
+        }
         if (tarea.estado == "Rechazada") {
             Text(
                 "Motivo del rechazo: ${tarea.motivoRechazo}",
@@ -751,7 +767,7 @@ fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                 ) {
                     Text(actividad.tituloTarea, style = MaterialTheme.typography.titleMedium)
                     Text(actividad.accion)
-                    Text("Estado: ${actividad.estado}")
+                    HuertoStatusChip(actividad.estado)
                     Text("Realizado por: ${actividad.nombreUsuario}")
                     Text("Fecha: ${actividad.fecha}")
                 }
@@ -810,10 +826,16 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     Text(reporte.descripcion, style = MaterialTheme.typography.titleMedium)
                     Text("Sector: ${sector?.nombre ?: "No disponible"}")
                     Text("Cultivo: ${cultivo?.nombreComun ?: "No especificado"}")
-                    Text("Prioridad: ${reporte.prioridad}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Prioridad:")
+                        HuertoStatusChip(reporte.prioridad)
+                    }
                     Text("Reportado por: ${reportante?.nombreCompleto ?: "Usuario"}")
                     Text("Fecha: ${reporte.fechaReporte}")
-                    Text("Estado: ${reporte.estado}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Estado:")
+                        HuertoStatusChip(reporte.estado)
+                    }
                     EvidenciaFotograficaSection(
                         titulo = "Fotografías del reporte",
                         evidencias = viewModel.evidenciasDeReporte(reporte.id),
@@ -1189,6 +1211,7 @@ private fun ScreenLayout(title: String, onBack: () -> Unit, content: @Composable
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

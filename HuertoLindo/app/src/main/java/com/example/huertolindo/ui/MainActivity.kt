@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,20 +53,21 @@ class MainActivity : ComponentActivity() {
                     var cultivoSeleccionado by remember { mutableStateOf("") }
                     var tareaSeleccionada by remember { mutableStateOf("") }
 
+                    Crossfade(targetState = pantallaActual, label = "screen-navigation") { pantalla ->
                     when {
-                        pantallaActual !in setOf("login", "registro") &&
+                        pantalla !in setOf("login", "registro") &&
                             huertoState.usuarioActual == null -> {
                             TextButton(onClick = { pantallaActual = "login" }) {
                                 Text("Sesión no iniciada · Volver al inicio")
                             }
                         }
-                        pantallaActual == "reportes" &&
+                        pantalla == "reportes" &&
                             huertoState.usuarioActual?.perfil != "administrador" -> {
                             TextButton(onClick = { pantallaActual = "menu" }) {
                                 Text("Acceso no autorizado · Volver")
                             }
                         }
-                        else -> when (pantallaActual) {
+                        else -> when (pantalla) {
                         "login" -> {
                             LoginScreen(
                                 viewModel = huertoViewModel,
@@ -181,6 +183,7 @@ class MainActivity : ComponentActivity() {
                                 onBack = { pantallaActual = "menu" }
                             )
                         }
+                    }
                     }
                     }
                 }
