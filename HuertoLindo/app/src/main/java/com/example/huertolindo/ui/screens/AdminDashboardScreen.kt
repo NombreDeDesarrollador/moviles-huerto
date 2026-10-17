@@ -28,7 +28,9 @@ fun AdminDashboardScreen(
     onSectorsClick: () -> Unit = {},
     onTasksClick: () -> Unit = {},
     onSensorsClick: () -> Unit = {},
-    onReportsClick: () -> Unit = {}
+    onReportsClick: () -> Unit = {},
+    onProblemsClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -50,9 +52,28 @@ fun AdminDashboardScreen(
                 "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas pendientes",
             style = MaterialTheme.typography.bodyLarge
         )
+        if (viewModel.tareasAtrasadas.isNotEmpty()) {
+            ElevatedCard(
+                onClick = onTasksClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Aviso: ${viewModel.tareasAtrasadas.size} tareas atrasadas",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    viewModel.tareasAtrasadas.take(3).forEach { tarea ->
+                        Text("${tarea.titulo} · vencía ${tarea.fechaProgramada}")
+                    }
+                }
+            }
+        }
         DashboardAction("Sectores y cultivos", "Consultar los espacios de cultivo y su estado.", onSectorsClick)
         DashboardAction("Tareas", "Revisar y actualizar las labores del huerto.", onTasksClick)
+        DashboardAction("Historial de actividades", "Consultar los cambios y entregas de tareas.", onHistoryClick)
         DashboardAction("Sensores", "Consultar lecturas simuladas de humedad y temperatura.", onSensorsClick)
+        DashboardAction("Problemas del huerto", "Consultar reportes y actualizar su atención.", onProblemsClick)
         DashboardAction("Reportes", "Ver un resumen del estado general del huerto.", onReportsClick)
         Spacer(Modifier.height(8.dp))
     }

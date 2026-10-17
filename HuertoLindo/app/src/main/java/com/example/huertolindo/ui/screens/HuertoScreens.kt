@@ -1,5 +1,6 @@
 package com.example.huertolindo.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,15 +21,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.example.huertolindo.ui.crearUriFotografia
 import com.example.huertolindo.data.model.SensorSimulado
+import com.example.huertolindo.data.model.Cultivo
 import com.example.huertolindo.data.model.Sector
+import com.example.huertolindo.data.model.Tarea
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
@@ -40,10 +51,14 @@ fun SectoresScreen(
 ) {
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
+    var sectorEnEdicion by remember { mutableStateOf<Sector?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     ScreenLayout("Sectores del huerto", onBack) {
         if (esAdministrador) {
-            Button(onClick = { mostrarFormulario = true }) { Text("Agregar sector") }
+            Button(onClick = {
+                sectorEnEdicion = null
+                mostrarFormulario = true
+            }) { Text("Agregar sector") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         if (viewModel.listaSectores.value.isEmpty()) {
@@ -61,6 +76,10 @@ fun SectoresScreen(
                     Text("${viewModel.listaCultivos.value.count { it.sectorId == sector.id }} cultivos")
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
+                            sectorEnEdicion = sector
+                            mostrarFormulario = true
+                        }) { Text("Editar sector") }
+                        OutlinedButton(onClick = {
                             error = if (viewModel.eliminarSector(sector.id)) null
                             else "No se puede eliminar un sector que tiene cultivos o tareas."
                         }) { Text("Eliminar sector") }
@@ -71,14 +90,23 @@ fun SectoresScreen(
     }
     if (mostrarFormulario) {
         FormularioSector(
-            onDismiss = { mostrarFormulario = false },
-            onSave = { nombre, descripcion ->
-                if (viewModel.agregarSector(nombre, descripcion)) {
+            sector = sectorEnEdicion,
+            onDismiss = {
+                mostrarFormulario = false
+                sectorEnEdicion = null
+            },
+            onSave = { nombre, descripcion, estado ->
+                val guardado = sectorEnEdicion?.let {
+                    viewModel.editarSector(it.id, nombre, descripcion, estado)
+                } ?: viewModel.agregarSector(nombre, descripcion)
+                if (guardado) {
                     error = null
                     mostrarFormulario = false
+                    sectorEnEdicion = null
                 } else {
-                    error = "Ingresa el nombre y la descripción del sector."
+                    error = "Completa el nombre y la descripción del sector."
                 }
+                guardado
             }
         )
     }
@@ -93,6 +121,7 @@ fun DetalleSectorScreen(
 ) {
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
+    var cultivoEnEdicion by remember { mutableStateOf<Cultivo?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val sector = viewModel.listaSectores.value.firstOrNull { it.id == sectorId }
     ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack) {
@@ -104,7 +133,10 @@ fun DetalleSectorScreen(
         Text("Estado: ${sector.estado}", style = MaterialTheme.typography.bodyLarge)
         Text("Cultivos", style = MaterialTheme.typography.titleLarge)
         if (esAdministrador) {
-            Button(onClick = { mostrarFormulario = true }) { Text("Agregar cultivo") }
+            Button(onClick = {
+                cultivoEnEdicion = null
+                mostrarFormulario = true
+            }) { Text("Agregar cultivo") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         val cultivos = viewModel.listaCultivos.value.filter { it.sectorId == sector.id }
@@ -120,6 +152,10 @@ fun DetalleSectorScreen(
                     Text("Siembra: ${cultivo.fechaSiembra}")
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
+                            cultivoEnEdicion = cultivo
+                            mostrarFormulario = true
+                        }) { Text("Editar cultivo") }
+                        OutlinedButton(onClick = {
                             viewModel.eliminarCultivo(cultivo.id)
                         }) { Text("Eliminar cultivo") }
                     }
@@ -129,14 +165,23 @@ fun DetalleSectorScreen(
     }
     if (mostrarFormulario) {
         FormularioCultivo(
-            onDismiss = { mostrarFormulario = false },
-            onSave = { nombre, fecha, frecuencia ->
-                if (viewModel.agregarCultivo(nombre, sectorId, fecha, frecuencia)) {
+            cultivo = cultivoEnEdicion,
+            onDismiss = {
+                mostrarFormulario = false
+                cultivoEnEdicion = null
+            },
+            onSave = { nombre, fecha, estado, frecuencia ->
+                val guardado = cultivoEnEdicion?.let {
+                    viewModel.editarCultivo(it.id, nombre, fecha, estado, frecuencia)
+                } ?: viewModel.agregarCultivo(nombre, sectorId, fecha, frecuencia)
+                if (guardado) {
                     error = null
                     mostrarFormulario = false
+                    cultivoEnEdicion = null
                 } else {
-                    error = "Completa todos los datos del cultivo."
+                    error = "Completa los datos del cultivo e ingresa una fecha válida (AAAA-MM-DD)."
                 }
+                guardado
             }
         )
     }
@@ -166,16 +211,86 @@ fun TareasScreen(
 ) {
     val esAdministrador = viewModel.esAdministrador
     var mostrarFormulario by remember { mutableStateOf(false) }
+    var tareaEnEdicion by remember { mutableStateOf<Tarea?>(null) }
+    var estadoFiltro by remember { mutableStateOf("") }
+    var fechaFiltro by remember { mutableStateOf("") }
+    var responsableFiltro by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val tareas = viewModel.tareasVisibles
+    val tareasFiltradas = tareas.filter { tarea ->
+        (estadoFiltro.isBlank() || tarea.estado == estadoFiltro) &&
+            (fechaFiltro.isBlank() || tarea.fechaProgramada == fechaFiltro.trim()) &&
+            (responsableFiltro.isBlank() || tarea.asignadoA == responsableFiltro)
+    }
     ScreenLayout("Tareas del huerto", onBack) {
         if (esAdministrador) {
-            Button(onClick = { mostrarFormulario = true }) { Text("Crear y asignar tarea") }
+            Button(onClick = {
+                tareaEnEdicion = null
+                mostrarFormulario = true
+            }) { Text("Crear y asignar tarea") }
             viewModel.errorCargaUsuarios?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-        if (tareas.isEmpty()) Text("No tienes tareas asignadas.")
-        tareas.forEach { tarea ->
+        if (viewModel.tareasAtrasadas.isNotEmpty()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "${viewModel.tareasAtrasadas.size} tareas atrasadas",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    viewModel.tareasAtrasadas.forEach { tarea ->
+                        Text("${tarea.titulo} · fecha límite ${tarea.fechaProgramada}")
+                    }
+                }
+            }
+        }
+        Text("Filtrar tareas", style = MaterialTheme.typography.titleMedium)
+        CampoSeleccion(
+            etiqueta = "Estado",
+            opciones = listOf("" to "Todos los estados") +
+                listOf("Pendiente", "En desarrollo", "Por validar", "Rechazada", "Completada")
+                    .map { it to it },
+            seleccionado = estadoFiltro,
+            onSeleccionar = { estadoFiltro = it }
+        )
+        OutlinedTextField(
+            value = fechaFiltro,
+            onValueChange = { fechaFiltro = it },
+            label = { Text("Fecha programada") },
+            placeholder = { Text("AAAA-MM-DD") },
+            supportingText = {
+                Text("Escribe una fecha exacta para filtrar.")
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (esAdministrador) {
+            CampoSeleccion(
+                etiqueta = "Responsable",
+                opciones = listOf("" to "Todos los responsables") +
+                    viewModel.usuariosDisponibles.value
+                        .filter { it.perfil == "estudiante" }
+                        .map { it.id to it.nombreCompleto },
+                seleccionado = responsableFiltro,
+                onSeleccionar = { responsableFiltro = it }
+            )
+        }
+        TextButton(onClick = {
+            estadoFiltro = ""
+            fechaFiltro = ""
+            responsableFiltro = ""
+        }) { Text("Limpiar filtros") }
+        if (tareasFiltradas.isEmpty()) {
+            Text(
+                if (tareas.isEmpty()) "No tienes tareas asignadas."
+                else "No hay tareas que coincidan con los filtros."
+            )
+        }
+        tareasFiltradas.forEach { tarea ->
             ElevatedCard(
                 onClick = { onTaskClick(tarea.id) },
                 modifier = Modifier.fillMaxWidth()
@@ -187,6 +302,15 @@ fun TareasScreen(
                     Text(tarea.titulo, style = MaterialTheme.typography.titleMedium)
                     Text("Estado: ${tarea.estado}")
                     Text("Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}")
+                    if (viewModel.tareasAtrasadas.any { it.id == tarea.id }) {
+                        Text("ATRASADA", color = MaterialTheme.colorScheme.error)
+                    }
+                    if (esAdministrador && tarea.estado != "Completada") {
+                        OutlinedButton(onClick = {
+                            tareaEnEdicion = tarea
+                            mostrarFormulario = true
+                        }) { Text("Editar tarea") }
+                    }
                 }
             }
         }
@@ -195,22 +319,27 @@ fun TareasScreen(
         FormularioTarea(
             sectores = viewModel.listaSectores.value,
             estudiantes = viewModel.usuariosDisponibles.value.filter { it.perfil == "estudiante" },
-            onDismiss = { mostrarFormulario = false },
+            tarea = tareaEnEdicion,
+            onDismiss = {
+                mostrarFormulario = false
+                tareaEnEdicion = null
+            },
             onSave = { titulo, instrucciones, sectorId, usuarioId, fechaProgramada ->
-                val creada = viewModel.crearTarea(
-                    titulo,
-                    instrucciones,
-                    sectorId,
-                    usuarioId,
-                    fechaProgramada
+                val guardada = tareaEnEdicion?.let { tarea ->
+                    viewModel.editarTarea(
+                        tarea.id, titulo, instrucciones, sectorId, usuarioId, fechaProgramada
+                    )
+                } ?: viewModel.crearTarea(
+                    titulo, instrucciones, sectorId, usuarioId, fechaProgramada
                 )
-                if (creada) {
+                if (guardada) {
                     error = null
                     mostrarFormulario = false
+                    tareaEnEdicion = null
                 } else {
                     error = "Completa los datos, ingresa una fecha válida (AAAA-MM-DD) y selecciona un sector y estudiante."
                 }
-                creada
+                guardada
             }
         )
     }
@@ -223,6 +352,29 @@ fun DetalleTareaScreen(
     onBack: () -> Unit
 ) {
     val tarea = viewModel.tareasVisibles.firstOrNull { it.id == tareaId }
+    var mostrarDialogoRechazo by remember { mutableStateOf(false) }
+    var motivoRechazo by remember { mutableStateOf("") }
+    var errorRechazo by remember { mutableStateOf(false) }
+    var comentarioEntrega by remember(tareaId) { mutableStateOf("") }
+    var imagenEntrega by remember(tareaId) { mutableStateOf<Uri?>(null) }
+    var uriCamaraPendiente by remember(tareaId) { mutableStateOf<Uri?>(null) }
+    var errorEntrega by remember { mutableStateOf<String?>(null) }
+    var enviandoEntrega by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val selectorEvidencia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        if (uri != null) {
+            imagenEntrega = uri
+            errorEntrega = null
+        }
+    }
+    val camaraEvidencia = rememberLauncherForActivityResult(TakePicture()) { capturada ->
+        if (capturada) {
+            imagenEntrega = uriCamaraPendiente
+            errorEntrega = null
+        }
+        uriCamaraPendiente = null
+    }
+    val evidencias = viewModel.evidenciasDeTarea(tareaId)
     ScreenLayout(tarea?.titulo ?: "Tarea no encontrada", onBack) {
         if (tarea == null) {
             Text("La tarea seleccionada ya no está disponible.")
@@ -233,21 +385,150 @@ fun DetalleTareaScreen(
         Text("Instrucciones", style = MaterialTheme.typography.titleMedium)
         Text(tarea.descripcion, style = MaterialTheme.typography.bodyLarge)
         Text("Estado: ${tarea.estado}", style = MaterialTheme.typography.bodyLarge)
+        if (tarea.estado == "Rechazada") {
+            Text(
+                "Motivo del rechazo: ${tarea.motivoRechazo}",
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Text(
             "Fecha programada: ${tarea.fechaProgramada.ifBlank { "Sin fecha programada" }}",
             style = MaterialTheme.typography.bodyLarge
         )
         Text("Sector: ${sector?.nombre ?: "No asignado"}")
         Text("Asignada a: ${estudiante?.nombreCompleto ?: tarea.asignadoA}")
+        if (evidencias.isNotEmpty()) {
+            Text("Comentario de entrega", style = MaterialTheme.typography.titleMedium)
+            Text(viewModel.comentariosEntrega.value[tarea.id].orEmpty())
+            Text("Evidencias", style = MaterialTheme.typography.titleMedium)
+            evidencias.forEach { evidencia ->
+                AsyncImage(
+                    model = Uri.fromFile(java.io.File(evidencia.rutaArchivo)),
+                    contentDescription = "Evidencia fotográfica de ${tarea.titulo}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentScale = ContentScale.Crop
+                )
+                Text("Adjuntada: ${evidencia.fechaRegistro}")
+            }
+        }
         if (viewModel.esAdministrador && tarea.estado == "Por validar") {
             Button(onClick = { viewModel.validarTarea(tarea.id) }) {
                 Text("Validar actividad")
             }
-        } else if (!viewModel.esAdministrador && tarea.estado == "Pendiente") {
-            Button(onClick = { viewModel.enviarTareaARevision(tarea.id) }) {
-                Text("Enviar a revisión")
+            OutlinedButton(onClick = {
+                motivoRechazo = ""
+                errorRechazo = false
+                mostrarDialogoRechazo = true
+            }) { Text("Rechazar actividad") }
+        } else if (!viewModel.esAdministrador && tarea.estado in setOf("Pendiente", "Rechazada")) {
+            Button(onClick = { viewModel.iniciarTarea(tarea.id) }) {
+                Text(if (tarea.estado == "Rechazada") "Corregir y volver a iniciar" else "Iniciar tarea")
+            }
+        } else if (!viewModel.esAdministrador && tarea.estado == "En desarrollo") {
+            Text("Entrega de actividad", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = comentarioEntrega,
+                onValueChange = {
+                    comentarioEntrega = it
+                    errorEntrega = null
+                },
+                label = { Text("Comentario del trabajo realizado") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                isError = errorEntrega != null && comentarioEntrega.isBlank()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    selectorEvidencia.launch(
+                        PickVisualMediaRequest(PickVisualMedia.ImageOnly)
+                    )
+                }) { Text("Elegir fotografía") }
+                OutlinedButton(onClick = {
+                    try {
+                        val uri = crearUriFotografia(context)
+                        uriCamaraPendiente = uri
+                        camaraEvidencia.launch(uri)
+                    } catch (exception: java.io.IOException) {
+                        errorEntrega = "No se pudo preparar la cámara."
+                    } catch (exception: SecurityException) {
+                        errorEntrega = "No se pudo acceder a la cámara."
+                    }
+                }) { Text("Tomar foto") }
+            }
+            imagenEntrega?.let { uri ->
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "Vista previa de la evidencia",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentScale = ContentScale.Crop
+                )
+                TextButton(onClick = {
+                    imagenEntrega = null
+                    errorEntrega = null
+                }) { Text("Quitar fotografía") }
+            }
+            errorEntrega?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                onClick = {
+                    enviandoEntrega = true
+                    errorEntrega = null
+                    viewModel.entregarTarea(
+                        tareaId = tarea.id,
+                        comentario = comentarioEntrega,
+                        imagenUri = imagenEntrega
+                    ) { resultado ->
+                        enviandoEntrega = false
+                        errorEntrega = resultado
+                        if (resultado == null) {
+                            comentarioEntrega = ""
+                            imagenEntrega = null
+                        }
+                    }
+                },
+                enabled = !enviandoEntrega
+            ) {
+                Text(if (enviandoEntrega) "Enviando..." else "Entregar para revisión")
             }
         }
+    }
+    if (mostrarDialogoRechazo && tarea != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoRechazo = false },
+            title = { Text("Rechazar actividad") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Indica qué debe corregir el estudiante.")
+                    OutlinedTextField(
+                        value = motivoRechazo,
+                        onValueChange = {
+                            motivoRechazo = it
+                            errorRechazo = false
+                        },
+                        label = { Text("Motivo del rechazo") },
+                        isError = errorRechazo,
+                        supportingText = {
+                            if (errorRechazo) Text("El motivo es obligatorio.")
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (viewModel.rechazarTarea(tarea.id, motivoRechazo)) {
+                        mostrarDialogoRechazo = false
+                    } else {
+                        errorRechazo = true
+                    }
+                }) { Text("Rechazar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoRechazo = false }) { Text("Cancelar") }
+            }
+        )
     }
 }
 
@@ -294,6 +575,205 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 }
 
 @Composable
+fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    ScreenLayout("Historial de actividades", onBack) {
+        val actividades = viewModel.historialVisible
+        if (actividades.isEmpty()) {
+            Text("Todavía no hay actividades registradas.")
+        }
+        actividades.forEach { actividad ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(actividad.tituloTarea, style = MaterialTheme.typography.titleMedium)
+                    Text(actividad.accion)
+                    Text("Estado: ${actividad.estado}")
+                    Text("Realizado por: ${actividad.nombreUsuario}")
+                    Text("Fecha: ${actividad.fecha}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    var mostrarFormulario by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    ScreenLayout(
+        if (viewModel.esAdministrador) "Problemas del huerto" else "Mis reportes de problemas",
+        onBack
+    ) {
+        Button(onClick = {
+            error = null
+            mostrarFormulario = true
+        }) { Text("Registrar problema") }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        viewModel.errorReportesProblemas?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+        if (viewModel.cargandoReportesProblemas) {
+            androidx.compose.material3.CircularProgressIndicator()
+        }
+
+        val reportes = viewModel.reportesProblemasVisibles
+        if (reportes.isEmpty() && !viewModel.cargandoReportesProblemas &&
+            viewModel.errorReportesProblemas == null
+        ) {
+            Text(
+                if (viewModel.esAdministrador) "No hay problemas reportados."
+                else "Todavía no has reportado problemas."
+            )
+        }
+        reportes.forEach { reporte ->
+            val sector = viewModel.listaSectores.value.firstOrNull { it.id == reporte.sectorId }
+            val cultivo = viewModel.listaCultivos.value.firstOrNull { it.id == reporte.cultivoId }
+            val reportante = viewModel.usuariosDisponibles.value
+                .firstOrNull { it.id == reporte.usuarioId }
+                ?: viewModel.usuarioActual?.takeIf { it.id == reporte.usuarioId }
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(reporte.descripcion, style = MaterialTheme.typography.titleMedium)
+                    Text("Sector: ${sector?.nombre ?: "No disponible"}")
+                    Text("Cultivo: ${cultivo?.nombreComun ?: "No especificado"}")
+                    Text("Prioridad: ${reporte.prioridad}")
+                    Text("Reportado por: ${reportante?.nombreCompleto ?: "Usuario"}")
+                    Text("Fecha: ${reporte.fechaReporte}")
+                    Text("Estado: ${reporte.estado}")
+                    if (viewModel.esAdministrador) {
+                        CampoSeleccion(
+                            etiqueta = "Cambiar estado",
+                            opciones = listOf(
+                                "Pendiente" to "Pendiente",
+                                "En atención" to "En atención",
+                                "Resuelto" to "Resuelto"
+                            ),
+                            seleccionado = reporte.estado,
+                            onSeleccionar = {
+                                viewModel.actualizarEstadoProblema(reporte.id, it) { errorEstado ->
+                                    error = errorEstado
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (mostrarFormulario) {
+        FormularioReporteProblema(
+            sectores = viewModel.listaSectores.value,
+            cultivos = viewModel.listaCultivos.value,
+            onDismiss = { mostrarFormulario = false },
+            onSave = { descripcion, sectorId, cultivoId, prioridad, onResult ->
+                viewModel.crearReporteProblema(
+                    descripcion,
+                    sectorId,
+                    cultivoId,
+                    prioridad
+                ) { resultado ->
+                    error = resultado
+                    if (resultado == null) mostrarFormulario = false
+                    onResult(resultado)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FormularioReporteProblema(
+    sectores: List<Sector>,
+    cultivos: List<Cultivo>,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String?, String, (String?) -> Unit) -> Unit
+) {
+    var descripcion by remember { mutableStateOf("") }
+    var sectorId by remember { mutableStateOf("") }
+    var cultivoId by remember { mutableStateOf("") }
+    var prioridad by remember { mutableStateOf("Media") }
+    var mostrarError by remember { mutableStateOf(false) }
+    var guardando by remember { mutableStateOf(false) }
+    val cultivosDelSector = cultivos.filter { it.sectorId == sectorId }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Registrar problema") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = descripcion,
+                    onValueChange = {
+                        descripcion = it
+                        mostrarError = false
+                    },
+                    label = { Text("Descripción del problema") },
+                    isError = mostrarError && descripcion.isBlank(),
+                    supportingText = {
+                        if (mostrarError && descripcion.isBlank()) Text("La descripción es obligatoria.")
+                    }
+                )
+                CampoSeleccion(
+                    etiqueta = "Sector",
+                    opciones = sectores.map { it.id to it.nombre },
+                    seleccionado = sectorId,
+                    onSeleccionar = {
+                        sectorId = it
+                        cultivoId = ""
+                    }
+                )
+                CampoSeleccion(
+                    etiqueta = "Cultivo (opcional)",
+                    opciones = listOf("" to "Sin cultivo específico") +
+                        cultivosDelSector.map { it.id to it.nombreComun },
+                    seleccionado = cultivoId,
+                    onSeleccionar = { cultivoId = it }
+                )
+                CampoSeleccion(
+                    etiqueta = "Prioridad",
+                    opciones = listOf("Baja", "Media", "Alta").map { it to it },
+                    seleccionado = prioridad,
+                    onSeleccionar = { prioridad = it }
+                )
+                if (sectores.isEmpty()) {
+                    Text("Primero debe existir al menos un sector.")
+                }
+                if (mostrarError && sectorId.isBlank()) {
+                    Text("Selecciona el sector afectado.", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                mostrarError = descripcion.isBlank() || sectorId.isBlank()
+                if (!mostrarError && !guardando) {
+                    guardando = true
+                    onSave(descripcion, sectorId, cultivoId.ifBlank { null }, prioridad) {
+                        guardando = false
+                        if (it != null) mostrarError = true
+                    }
+                }
+            }, enabled = !guardando) {
+                Text(if (guardando) "Enviando..." else "Enviar reporte")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !guardando) { Text("Cancelar") }
+        }
+    )
+}
+
+@Composable
 private fun ReporteDato(etiqueta: String, valor: String) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -310,45 +790,118 @@ private fun ReporteDato(etiqueta: String, valor: String) {
 
 @Composable
 private fun FormularioSector(
+    sector: Sector? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    onSave: (String, String, String) -> Boolean
 ) {
-    var nombre by remember { mutableStateOf("") }
-    var descripcion by remember { mutableStateOf("") }
+    var nombre by remember(sector?.id) { mutableStateOf(sector?.nombre.orEmpty()) }
+    var descripcion by remember(sector?.id) { mutableStateOf(sector?.descripcion.orEmpty()) }
+    var estado by remember(sector?.id) { mutableStateOf(sector?.estado ?: "Disponible") }
+    var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agregar sector") },
+        title = { Text(if (sector == null) "Agregar sector" else "Editar sector") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre") }, singleLine = true)
-                OutlinedTextField(descripcion, { descripcion = it }, label = { Text("Descripción") })
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre") },
+                    singleLine = true,
+                    isError = mostrarError && nombre.isBlank()
+                )
+                OutlinedTextField(
+                    value = descripcion,
+                    onValueChange = { descripcion = it },
+                    label = { Text("Descripción") },
+                    isError = mostrarError && descripcion.isBlank()
+                )
+                if (sector != null) {
+                    CampoSeleccion(
+                        etiqueta = "Estado",
+                        opciones = listOf("Disponible", "En uso", "Inactivo").map { it to it },
+                        seleccionado = estado,
+                        onSeleccionar = { estado = it }
+                    )
+                }
+                if (mostrarError) {
+                    Text("Completa el nombre y la descripción.", color = MaterialTheme.colorScheme.error)
+                }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(nombre, descripcion) }) { Text("Guardar") } },
+        confirmButton = {
+            TextButton(onClick = { mostrarError = !onSave(nombre, descripcion, estado) }) {
+                Text(if (sector == null) "Guardar" else "Guardar cambios")
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
 
 @Composable
 private fun FormularioCultivo(
+    cultivo: Cultivo? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit
+    onSave: (String, String, String, String) -> Boolean
 ) {
-    var nombre by remember { mutableStateOf("") }
-    var fechaSiembra by remember { mutableStateOf("") }
-    var frecuencia by remember { mutableStateOf("") }
+    var nombre by remember(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
+    var fechaSiembra by remember(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
+    var estado by remember(cultivo?.id) {
+        mutableStateOf(cultivo?.estadoDesarrollo ?: "En crecimiento")
+    }
+    var frecuencia by remember(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
+    var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agregar cultivo") },
+        title = { Text(if (cultivo == null) "Agregar cultivo" else "Editar cultivo") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(nombre, { nombre = it }, label = { Text("Nombre del cultivo") }, singleLine = true)
-                OutlinedTextField(fechaSiembra, { fechaSiembra = it }, label = { Text("Fecha de siembra") }, singleLine = true)
-                OutlinedTextField(frecuencia, { frecuencia = it }, label = { Text("Frecuencia de riego") }, singleLine = true)
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = { nombre = it },
+                    label = { Text("Nombre del cultivo") },
+                    singleLine = true,
+                    isError = mostrarError && nombre.isBlank()
+                )
+                OutlinedTextField(
+                    value = fechaSiembra,
+                    onValueChange = { fechaSiembra = it },
+                    label = { Text("Fecha de siembra (AAAA-MM-DD)") },
+                    singleLine = true,
+                    isError = mostrarError
+                )
+                if (cultivo != null) {
+                    CampoSeleccion(
+                        etiqueta = "Estado de desarrollo",
+                        opciones = listOf(
+                            "Sembrado",
+                            "En crecimiento",
+                            "Desarrollo",
+                            "Listo para cosechar"
+                        ).map { it to it },
+                        seleccionado = estado,
+                        onSeleccionar = { estado = it }
+                    )
+                }
+                OutlinedTextField(
+                    value = frecuencia,
+                    onValueChange = { frecuencia = it },
+                    label = { Text("Frecuencia de riego") },
+                    singleLine = true,
+                    isError = mostrarError && frecuencia.isBlank()
+                )
+                if (mostrarError) {
+                    Text(
+                        "Completa todos los campos e ingresa una fecha válida (AAAA-MM-DD).",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(nombre, fechaSiembra, frecuencia) }) { Text("Guardar") }
+            TextButton(onClick = {
+                mostrarError = !onSave(nombre, fechaSiembra, estado, frecuencia)
+            }) { Text(if (cultivo == null) "Guardar" else "Guardar cambios") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
@@ -358,18 +911,21 @@ private fun FormularioCultivo(
 private fun FormularioTarea(
     sectores: List<Sector>,
     estudiantes: List<Usuario>,
+    tarea: Tarea? = null,
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, String) -> Boolean
 ) {
-    var titulo by remember { mutableStateOf("") }
-    var instrucciones by remember { mutableStateOf("") }
-    var sectorId by remember { mutableStateOf("") }
-    var usuarioId by remember { mutableStateOf("") }
-    var fechaProgramada by remember { mutableStateOf("") }
+    var titulo by remember(tarea?.id) { mutableStateOf(tarea?.titulo.orEmpty()) }
+    var instrucciones by remember(tarea?.id) { mutableStateOf(tarea?.descripcion.orEmpty()) }
+    var sectorId by remember(tarea?.id) { mutableStateOf(tarea?.sectorId.orEmpty()) }
+    var usuarioId by remember(tarea?.id) { mutableStateOf(tarea?.asignadoA.orEmpty()) }
+    var fechaProgramada by remember(tarea?.id) {
+        mutableStateOf(tarea?.fechaProgramada.orEmpty())
+    }
     var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Crear y asignar tarea") },
+        title = { Text(if (tarea == null) "Crear y asignar tarea" else "Editar tarea") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -409,7 +965,7 @@ private fun FormularioTarea(
         confirmButton = {
             TextButton(onClick = {
                 mostrarError = !onSave(titulo, instrucciones, sectorId, usuarioId, fechaProgramada)
-            }) { Text("Crear") }
+            }) { Text(if (tarea == null) "Crear" else "Guardar cambios") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )

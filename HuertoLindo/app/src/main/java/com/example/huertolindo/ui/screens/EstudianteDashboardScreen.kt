@@ -24,7 +24,9 @@ fun EstudianteDashboardScreen(
     onProfileClick: () -> Unit,
     onSectorsClick: () -> Unit = {},
     onTasksClick: () -> Unit = {},
-    onSensorsClick: () -> Unit = {}
+    onSensorsClick: () -> Unit = {},
+    onProblemsClick: () -> Unit = {},
+    onHistoryClick: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -45,9 +47,20 @@ fun EstudianteDashboardScreen(
             "Tienes ${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas asignadas por realizar.",
             style = MaterialTheme.typography.bodyLarge
         )
+        if (viewModel.tareasAtrasadas.isNotEmpty()) {
+            DashboardAction(
+                "Aviso: ${viewModel.tareasAtrasadas.size} tareas atrasadas",
+                viewModel.tareasAtrasadas.take(3).joinToString("\n") {
+                    "${it.titulo} · vencía ${it.fechaProgramada}"
+                },
+                onTasksClick
+            )
+        }
         DashboardAction("Explorar sectores", "Consulta cultivos y detalles de cada sector.", onSectorsClick)
         DashboardAction("Mis tareas", "Envía a revisión las labores que termines.", onTasksClick)
+        DashboardAction("Historial de actividades", "Consulta los cambios y entregas de tus tareas.", onHistoryClick)
         DashboardAction("Sensores", "Revisa las condiciones simuladas del huerto.", onSensorsClick)
+        DashboardAction("Reportar problema", "Registra y consulta problemas del huerto.", onProblemsClick)
         Spacer(Modifier.padding(bottom = 8.dp))
     }
 }

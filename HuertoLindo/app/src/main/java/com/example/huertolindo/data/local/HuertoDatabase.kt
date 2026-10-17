@@ -28,6 +28,9 @@ interface UsuarioDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(usuario: Usuario)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun asegurar(usuario: Usuario)
+
     @Update
     suspend fun actualizar(usuario: Usuario)
 }
@@ -43,6 +46,9 @@ interface SectorDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(sector: Sector)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun asegurar(sector: Sector)
+
     @Update
     suspend fun actualizar(sector: Sector)
 }
@@ -57,6 +63,9 @@ interface CultivoDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(cultivo: Cultivo)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun asegurar(cultivo: Cultivo)
 
     @Update
     suspend fun actualizar(cultivo: Cultivo)
@@ -100,11 +109,17 @@ interface ValidacionDao {
 
 @Dao
 interface ReporteProblemaDao {
+    @Query("SELECT * FROM reporte_problemas ORDER BY fecha_reporte DESC")
+    suspend fun obtenerTodos(): List<ReporteProblema>
+
     @Query("SELECT * FROM reporte_problemas WHERE usuario_id = :usuarioId ORDER BY fecha_reporte DESC")
     suspend fun obtenerPorUsuario(usuarioId: String): List<ReporteProblema>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(reporteProblema: ReporteProblema)
+
+    @Update
+    suspend fun actualizar(reporteProblema: ReporteProblema)
 }
 
 @Database(
@@ -117,7 +132,7 @@ interface ReporteProblemaDao {
         Validacion::class,
         ReporteProblema::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {

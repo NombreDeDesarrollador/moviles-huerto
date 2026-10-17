@@ -29,5 +29,6 @@ data class Tarea(
     @ColumnInfo(name = "sector_id") val sectorId: String,
     @ColumnInfo(name = "usuario_id") val asignadoA: String,
     @ColumnInfo(name = "estado") val estado: String,
-    @ColumnInfo(name = "fecha_programada") val fechaProgramada: String = ""
+    @ColumnInfo(name = "fecha_programada") val fechaProgramada: String = "",
+    @ColumnInfo(name = "motivo_rechazo") val motivoRechazo: String = ""
 )

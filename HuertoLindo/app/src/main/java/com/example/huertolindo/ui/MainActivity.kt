@@ -20,7 +20,9 @@ import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.DetalleCultivoScreen
 import com.example.huertolindo.ui.screens.DetalleTareaScreen
 import com.example.huertolindo.ui.screens.DetalleSectorScreen
+import com.example.huertolindo.ui.screens.HistorialActividadesScreen
 import com.example.huertolindo.ui.screens.LoginScreen
+import com.example.huertolindo.ui.screens.ReportesProblemasScreen
 import com.example.huertolindo.ui.screens.ReportesScreen
 import com.example.huertolindo.ui.screens.RegistroScreen
 import com.example.huertolindo.ui.screens.SectoresScreen
@@ -71,6 +73,7 @@ class MainActivity : ComponentActivity() {
                                     pantallaActual = "registro"
                                 },
                                 onLoginSuccess = {
+                                    huertoViewModel.cargarReportesProblema()
                                     if (huertoViewModel.esAdministrador) {
                                         huertoViewModel.cargarUsuariosDisponibles()
                                     }
@@ -96,7 +99,9 @@ class MainActivity : ComponentActivity() {
                                     onSectorsClick = { pantallaActual = "sectores" },
                                     onTasksClick = { pantallaActual = "tareas" },
                                     onSensorsClick = { pantallaActual = "sensores" },
-                                    onReportsClick = { pantallaActual = "reportes" }
+                                    onReportsClick = { pantallaActual = "reportes" },
+                                    onProblemsClick = { pantallaActual = "problemas" },
+                                    onHistoryClick = { pantallaActual = "historial" }
                                 )
                             } else {
                                 EstudianteDashboardScreen(
@@ -104,7 +109,9 @@ class MainActivity : ComponentActivity() {
                                     onProfileClick = { pantallaActual = "perfil" },
                                     onSectorsClick = { pantallaActual = "sectores" },
                                     onTasksClick = { pantallaActual = "tareas" },
-                                    onSensorsClick = { pantallaActual = "sensores" }
+                                    onSensorsClick = { pantallaActual = "sensores" },
+                                    onProblemsClick = { pantallaActual = "problemas" },
+                                    onHistoryClick = { pantallaActual = "historial" }
                                 )
                             }
                         }
@@ -157,6 +164,14 @@ class MainActivity : ComponentActivity() {
                             onBack = { pantallaActual = "tareas" }
                         )
                         "sensores" -> SensoresScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "problemas" -> ReportesProblemasScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "historial" -> HistorialActividadesScreen(
                             viewModel = huertoViewModel,
                             onBack = { pantallaActual = "menu" }
                         )

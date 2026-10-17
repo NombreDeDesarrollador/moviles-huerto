@@ -19,5 +19,23 @@ object PermisosHuerto {
     fun puedeEnviarTarea(perfil: String, usuarioId: String, tarea: Tarea): Boolean =
         perfil == ESTUDIANTE &&
             tarea.asignadoA == usuarioId &&
-            tarea.estado == "Pendiente"
+            tarea.estado == "En desarrollo"
+
+    fun puedeIniciarTarea(perfil: String, usuarioId: String, tarea: Tarea): Boolean =
+        perfil == ESTUDIANTE &&
+            tarea.asignadoA == usuarioId &&
+            tarea.estado in setOf("Pendiente", "Rechazada")
+
+    fun puedeValidarTarea(perfil: String?, estado: String): Boolean =
+        esAdministrador(perfil) && estado == "Por validar"
+
+    fun puedeRechazarTarea(perfil: String?, estado: String, motivo: String): Boolean =
+        puedeValidarTarea(perfil, estado) && motivo.isNotBlank()
+
+    fun tareasAtrasadas(tareas: List<Tarea>, fechaActual: String): List<Tarea> =
+        tareas.filter { tarea ->
+            tarea.estado != "Completada" &&
+                tarea.fechaProgramada.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) &&
+                tarea.fechaProgramada < fechaActual
+        }
 }
