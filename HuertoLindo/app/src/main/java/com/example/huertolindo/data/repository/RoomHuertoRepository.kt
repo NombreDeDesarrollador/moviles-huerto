@@ -17,6 +17,7 @@ import com.example.huertolindo.data.model.TipoAsociacionEvidencia
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.data.model.Validacion
 import com.example.huertolindo.data.security.PasswordHasher
+import com.example.huertolindo.data.security.PermisosHuerto
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
@@ -98,6 +99,18 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     override suspend fun registrarUsuario(usuario: Usuario) {
         database.usuarioDao().insertar(usuario)
     }
+
+    override suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean =
+        database.withTransaction {
+            val administrador = database.usuarioDao().obtenerPorId(administradorId)
+            if (!PermisosHuerto.esAdministrador(administrador?.perfil) ||
+                !PermisosHuerto.esAdministrador(usuario.perfil)
+            ) {
+                return@withTransaction false
+            }
+            database.usuarioDao().insertar(usuario)
+            true
+        }
 
     override suspend fun cargarSnapshot(): HuertoSnapshot = HuertoSnapshot(
         sectores = database.sectorDao().obtenerTodos(),

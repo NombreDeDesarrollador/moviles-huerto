@@ -34,7 +34,8 @@ fun AdminDashboardScreen(
     onSensorsClick: () -> Unit = {},
     onReportsClick: () -> Unit = {},
     onProblemsClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {}
+    onHistoryClick: () -> Unit = {},
+    onAdministratorsClick: () -> Unit = {}
 ) {
     val uiState = collectHuertoUiState(viewModel)
     Column(
@@ -91,6 +92,11 @@ fun AdminDashboardScreen(
         DashboardAction("Sensores", "Consultar lecturas simuladas de humedad y temperatura.", onSensorsClick)
         DashboardAction("Problemas del huerto", "Consultar reportes y actualizar su atención.", onProblemsClick)
         DashboardAction("Reportes", "Ver un resumen del estado general del huerto.", onReportsClick)
+        DashboardAction(
+            "Administradores",
+            "Registrar nuevas cuentas de administrador.",
+            onAdministratorsClick
+        )
         Spacer(Modifier.height(8.dp))
     }
 }

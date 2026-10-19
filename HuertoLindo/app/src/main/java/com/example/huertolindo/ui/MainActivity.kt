@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
+import com.example.huertolindo.ui.screens.RegistroAdministradorScreen
 import com.example.huertolindo.ui.screens.EstudianteDashboardScreen
 import com.example.huertolindo.ui.screens.DetalleCultivoScreen
 import com.example.huertolindo.ui.screens.DetalleTareaScreen
@@ -30,6 +31,7 @@ import com.example.huertolindo.ui.screens.SectoresScreen
 import com.example.huertolindo.ui.screens.SensoresScreen
 import com.example.huertolindo.ui.screens.TareasScreen
 import com.example.huertolindo.ui.theme.HuertoLindoTheme
+import com.example.huertolindo.data.security.PermisosHuerto
 import com.example.huertolindo.viewmodel.HuertoViewModel
 
 class MainActivity : ComponentActivity() {
@@ -59,6 +61,12 @@ class MainActivity : ComponentActivity() {
                             huertoState.usuarioActual == null -> {
                             TextButton(onClick = { pantallaActual = "login" }) {
                                 Text("Sesión no iniciada · Volver al inicio")
+                            }
+                        }
+                        pantalla == "administradores" &&
+                            !PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil) -> {
+                            TextButton(onClick = { pantallaActual = "menu" }) {
+                                Text("Acceso no autorizado · Volver")
                             }
                         }
                         pantalla == "reportes" &&
@@ -103,7 +111,8 @@ class MainActivity : ComponentActivity() {
                                     onSensorsClick = { pantallaActual = "sensores" },
                                     onReportsClick = { pantallaActual = "reportes" },
                                     onProblemsClick = { pantallaActual = "problemas" },
-                                    onHistoryClick = { pantallaActual = "historial" }
+                                    onHistoryClick = { pantallaActual = "historial" },
+                                    onAdministratorsClick = { pantallaActual = "administradores" }
                                 )
                             } else {
                                 EstudianteDashboardScreen(
@@ -130,6 +139,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                        "administradores" -> RegistroAdministradorScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" },
+                            onRegistrationSuccess = { pantallaActual = "menu" }
+                        )
                         "sectores" -> SectoresScreen(
                             viewModel = huertoViewModel,
                             onBack = { pantallaActual = "menu" },

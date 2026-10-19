@@ -1011,6 +1011,55 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun registrarAdministrador(
+        nombre: String,
+        apellido: String,
+        correo: String,
+        password: String,
+        onResult: (ResultadoRegistroAdministrador) -> Unit
+    ) {
+        viewModelScope.launch {
+            val administradorId = usuarioActual
+                ?.takeIf { PermisosHuerto.esAdministrador(it.perfil) }
+                ?.id
+            if (administradorId == null) {
+                onResult(ResultadoRegistroAdministrador.NoAutorizado)
+                return@launch
+            }
+
+            val resultado = try {
+                withContext(Dispatchers.IO) {
+                    val salt = PasswordHasher.createSalt()
+                    val usuario = Usuario(
+                        id = java.util.UUID.randomUUID().toString(),
+                        nombre = nombre.trim(),
+                        correo = correo.trim().lowercase(Locale.ROOT),
+                        perfil = PermisosHuerto.ADMINISTRADOR,
+                        tallerAsignado = "General",
+                        apellido = apellido.trim(),
+                        passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
+                        passwordHash = Base64.encodeToString(
+                            PasswordHasher.hash(password, salt),
+                            Base64.NO_WRAP
+                        )
+                    )
+                    if (huertoRepository.registrarAdministrador(usuario, administradorId)) {
+                        ResultadoRegistroAdministrador.Exito
+                    } else {
+                        ResultadoRegistroAdministrador.NoAutorizado
+                    }
+                }
+            } catch (exception: SQLiteConstraintException) {
+                ResultadoRegistroAdministrador.CorreoYaRegistrado
+            } catch (exception: SQLiteException) {
+                ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
+            } catch (exception: java.security.GeneralSecurityException) {
+                ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
+            }
+            onResult(resultado)
+        }
+    }
+
     fun actualizarFotoPerfil(uri: Uri?) {
         _fotoPerfilUri.value = uri
     }
@@ -1032,5 +1081,12 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         data object Exito : ResultadoRegistro
         data object CorreoYaRegistrado : ResultadoRegistro
         data object ErrorDeBaseDeDatos : ResultadoRegistro
+    }
+
+    sealed interface ResultadoRegistroAdministrador {
+        data object Exito : ResultadoRegistroAdministrador
+        data object CorreoYaRegistrado : ResultadoRegistroAdministrador
+        data object NoAutorizado : ResultadoRegistroAdministrador
+        data object ErrorDeBaseDeDatos : ResultadoRegistroAdministrador
     }
 }

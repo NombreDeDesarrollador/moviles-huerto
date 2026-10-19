@@ -27,6 +27,7 @@ interface HuertoRepository {
     suspend fun obtenerUsuarios(): List<Usuario>
     suspend fun autenticar(correo: String, password: String): Usuario?
     suspend fun registrarUsuario(usuario: Usuario)
+    suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean
     suspend fun cargarSnapshot(): HuertoSnapshot
     suspend fun guardarSector(sector: Sector)
     suspend fun actualizarSector(sector: Sector)
