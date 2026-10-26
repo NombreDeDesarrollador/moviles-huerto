@@ -14,6 +14,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.example.huertolindo.ui.FotoScreen
 import com.example.huertolindo.ui.screens.AdminDashboardScreen
@@ -49,11 +50,11 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val huertoState by huertoViewModel.uiState.collectAsState()
-                    var pantallaActual by remember { mutableStateOf("login") }
-                    var mensajeRegistro by remember { mutableStateOf<String?>(null) }
-                    var sectorSeleccionado by remember { mutableStateOf("") }
-                    var cultivoSeleccionado by remember { mutableStateOf("") }
-                    var tareaSeleccionada by remember { mutableStateOf("") }
+                    var pantallaActual by rememberSaveable { mutableStateOf("login") }
+                    var mensajeRegistro by rememberSaveable { mutableStateOf<String?>(null) }
+                    var sectorSeleccionado by rememberSaveable { mutableStateOf("") }
+                    var cultivoSeleccionado by rememberSaveable { mutableStateOf("") }
+                    var tareaSeleccionada by rememberSaveable { mutableStateOf("") }
 
                     Crossfade(targetState = pantallaActual, label = "screen-navigation") { pantalla ->
                     when {
