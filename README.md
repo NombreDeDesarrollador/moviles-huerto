@@ -62,7 +62,9 @@ HuertoLindo/app/src/main/java/com/example/huertolindo/
 │   ├── repository/     HuertoRepository (interfaz) y RoomHuertoRepository
 │   └── security/       PasswordHasher, PermisosHuerto, ReglasHuerto
 ├── ui/
+│   ├── components/    Componentes Compose reutilizables, como DashboardAction
 │   ├── screens/        Login, Registro, dashboards, sectores, cultivos, tareas, etc.
+│   │                   HuertoUiState centraliza la recolección del estado compartido
 │   ├── theme/          Color, Tema y Tipografía
 │   └── MainActivity.kt, Foto.kt, CamaraUtils.kt, StatusChip.kt
 └── viewmodel/          HuertoViewModel (estado de la UI y lógica de negocio)

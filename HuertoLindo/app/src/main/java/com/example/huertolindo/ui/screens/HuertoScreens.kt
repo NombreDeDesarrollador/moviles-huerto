@@ -30,7 +30,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,11 +51,6 @@ import com.example.huertolindo.data.model.TipoTarea
 import com.example.huertolindo.data.model.Usuario
 import com.example.huertolindo.ui.HuertoStatusChip
 import com.example.huertolindo.viewmodel.HuertoViewModel
-import com.example.huertolindo.viewmodel.HuertoUiState
-
-@Composable
-internal fun collectHuertoUiState(viewModel: HuertoViewModel): HuertoUiState =
-    viewModel.uiState.collectAsState().value
 
 @Composable
 fun SectoresScreen(
