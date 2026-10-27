@@ -315,6 +315,20 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
     fun evidenciasDeTarea(tareaId: String): List<Evidencia> =
         evidenciasTareas.value.filter { it.tareaId == tareaId }
 
+    fun puedeAdjuntarEvidenciaTarea(tarea: Tarea): Boolean =
+        PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+            usuarioActual?.perfil,
+            usuarioActual?.id,
+            tarea
+        )
+
+    fun puedeEliminarEvidenciaTarea(tarea: Tarea): Boolean =
+        PermisosHuerto.puedeEliminarEvidenciaTarea(
+            usuarioActual?.perfil,
+            usuarioActual?.id,
+            tarea
+        )
+
     fun evidenciasDeCultivo(cultivoId: String): List<Evidencia> =
         evidenciasTareas.value.filter { it.cultivoId == cultivoId }
 
@@ -335,11 +349,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         val destinoDisponible = when (tipoAsociacion) {
             TipoAsociacionEvidencia.TAREA -> {
                 val tarea = listaTareas.value.firstOrNull { it.id == entidadId }
-                tarea != null && (
-                    esAdministrador ||
-                        (tarea.asignadoA == usuario.id &&
-                            tarea.estado in setOf("En desarrollo", "Rechazada"))
-                    )
+                tarea != null && puedeAdjuntarEvidenciaTarea(tarea)
             }
             TipoAsociacionEvidencia.CULTIVO ->
                 listaCultivos.value.any { it.id == entidadId }
@@ -390,7 +400,7 @@ class HuertoViewModel(application: Application) : AndroidViewModel(application) 
         val puedeEliminar = when {
             evidencia.tareaId != null -> {
                 val tarea = listaTareas.value.firstOrNull { it.id == evidencia.tareaId }
-                tarea != null && (esAdministrador || tarea.asignadoA == usuario.id)
+                tarea != null && puedeEliminarEvidenciaTarea(tarea)
             }
             evidencia.cultivoId != null ->
                 listaCultivos.value.any { it.id == evidencia.cultivoId }

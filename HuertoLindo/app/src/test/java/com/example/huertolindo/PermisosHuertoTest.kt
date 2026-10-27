@@ -47,6 +47,70 @@ class PermisosHuertoTest {
     }
 
     @Test
+    fun soloEstudianteResponsablePuedeAdjuntarEvidenciaDeTareaEnCursoORechazada() {
+        assertTrue(
+            PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[0]
+            )
+        )
+        assertTrue(
+            PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[2].copy(estado = "Rechazada")
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "admin-1",
+                tareas[0]
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-2",
+                tareas[0]
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeAdjuntarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-2",
+                tareas[1]
+            )
+        )
+    }
+
+    @Test
+    fun soloEstudianteResponsablePuedeEliminarEvidenciaDeTarea() {
+        assertTrue(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[0]
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ADMINISTRADOR,
+                "admin-1",
+                tareas[0]
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-2",
+                tareas[0]
+            )
+        )
+    }
+
+    @Test
     fun tareaRechazadaPuedeReiniciarseSoloPorSuResponsable() {
         val rechazada = Tarea(
             "rechazada", "Poda", "Podar", "sector-1", "estudiante-1", "Rechazada"

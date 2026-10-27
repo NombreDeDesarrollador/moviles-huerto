@@ -38,6 +38,8 @@ fun EvidenciaFotograficaSection(
     titulo: String,
     evidencias: List<Evidencia>,
     editable: Boolean = true,
+    puedeAgregar: Boolean = editable,
+    puedeEliminar: Boolean = editable,
     onAgregarFoto: (Uri, (String?) -> Unit) -> Unit,
     onEliminarFoto: (Evidencia, (String?) -> Unit) -> Unit
 ) {
@@ -74,7 +76,7 @@ fun EvidenciaFotograficaSection(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(titulo, style = MaterialTheme.typography.titleMedium)
-        if (editable) {
+        if (puedeAgregar) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     selectorFotos.launch(
@@ -122,7 +124,7 @@ fun EvidenciaFotograficaSection(
                     contentScale = ContentScale.Crop
                 )
                 Text("Adjuntada: ${evidencia.fechaRegistro}")
-                if (editable) {
+                if (puedeEliminar) {
                     TextButton(
                         onClick = {
                             onEliminarFoto(evidencia) { resultado -> error = resultado }

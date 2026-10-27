@@ -557,8 +557,10 @@ fun DetalleTareaScreen(
             titulo = "Registro fotográfico de la tarea",
             evidencias = evidencias,
             editable = viewModel.esAdministrador ||
-                (tarea.asignadoA == uiState.usuarioActual?.id &&
-                    tarea.estado in setOf("En desarrollo", "Rechazada")),
+                viewModel.puedeAdjuntarEvidenciaTarea(tarea),
+            puedeAgregar = viewModel.puedeAdjuntarEvidenciaTarea(tarea) &&
+                tarea.estado != "En desarrollo",
+            puedeEliminar = viewModel.puedeEliminarEvidenciaTarea(tarea),
             onAgregarFoto = { uri, onResult ->
                 viewModel.agregarEvidencia(
                     TipoAsociacionEvidencia.TAREA,

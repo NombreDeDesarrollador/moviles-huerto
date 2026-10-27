@@ -21,6 +21,25 @@ object PermisosHuerto {
             tarea.asignadoA == usuarioId &&
             tarea.estado == "En desarrollo"
 
+    fun puedeAdjuntarEvidenciaTarea(
+        perfil: String?,
+        usuarioId: String?,
+        tarea: Tarea
+    ): Boolean =
+        perfil == ESTUDIANTE &&
+            usuarioId != null &&
+            tarea.asignadoA == usuarioId &&
+            tarea.estado in setOf("En desarrollo", "Rechazada")
+
+    fun puedeEliminarEvidenciaTarea(
+        perfil: String?,
+        usuarioId: String?,
+        tarea: Tarea
+    ): Boolean =
+        perfil == ESTUDIANTE &&
+            usuarioId != null &&
+            tarea.asignadoA == usuarioId
+
     fun puedeIniciarTarea(perfil: String, usuarioId: String, tarea: Tarea): Boolean =
         perfil == ESTUDIANTE &&
             tarea.asignadoA == usuarioId &&
