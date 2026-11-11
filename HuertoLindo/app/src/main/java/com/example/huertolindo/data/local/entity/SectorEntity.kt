@@ -10,5 +10,9 @@ data class SectorEntity(
     @ColumnInfo(name = "nombre") val nombre: String,
     @ColumnInfo(name = "descripcion") val descripcion: String,
     @ColumnInfo(name = "estado") val estado: String,
-    @ColumnInfo(name = "ubicacion", defaultValue = "''") val ubicacion: String = ""
+    @ColumnInfo(name = "ubicacion", defaultValue = "''") val ubicacion: String = "",
+    @ColumnInfo(name = "fecha_inicio_mantenimiento", defaultValue = "''")
+    val fechaInicioMantenimiento: String = "",
+    @ColumnInfo(name = "fecha_termino_mantenimiento", defaultValue = "''")
+    val fechaTerminoMantenimiento: String = ""
 )

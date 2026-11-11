@@ -45,6 +45,7 @@ fun RegistroScreen(
     var correo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmarPassword by remember { mutableStateOf("") }
+    var tallerAsignado by remember { mutableStateOf("") }
     var intentoRegistro by remember { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
     var errorServidor by remember { mutableStateOf<String?>(null) }
@@ -136,19 +137,33 @@ fun RegistroScreen(
             isError = validacion.errorConfirmarPassword != null,
             supportingText = { validacion.errorConfirmarPassword?.let { Text(it) } }
         )
+        OutlinedTextField(
+            value = tallerAsignado,
+            onValueChange = { tallerAsignado = it },
+            label = { Text("Grupo o taller") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            isError = intentoRegistro && tallerAsignado.isBlank(),
+            supportingText = {
+                if (intentoRegistro && tallerAsignado.isBlank()) {
+                    Text("Indica el grupo o taller al que perteneces.")
+                }
+            }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = {
                 intentoRegistro = true
                 errorServidor = null
-                if (validacion.esValido) {
+                if (validacion.esValido && tallerAsignado.isNotBlank()) {
                     cargando = true
                     viewModel.registrarUsuario(
                         nombre = nombre,
                         apellido = apellido,
                         correo = validacion.correoNormalizado,
-                        password = password
+                        password = password,
+                        tallerAsignado = tallerAsignado
                     ) { resultado ->
                         cargando = false
                         when (resultado) {

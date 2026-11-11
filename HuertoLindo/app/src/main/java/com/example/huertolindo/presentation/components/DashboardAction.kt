@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -64,7 +65,11 @@ private fun DashboardAction(action: DashboardActionItem, modifier: Modifier = Mo
             .animateContentSize()
             .border(BorderStroke(0.75.dp, Color.Black), cardShape)
             .semantics { contentDescription = action.title },
-        shape = cardShape
+        shape = cardShape,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        )
     ) {
         Column(
             modifier = Modifier
@@ -77,7 +82,7 @@ private fun DashboardAction(action: DashboardActionItem, modifier: Modifier = Mo
                 modifier = Modifier
                     .size(76.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
                 Text(action.illustration, fontSize = 40.sp)

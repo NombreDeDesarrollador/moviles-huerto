@@ -18,4 +18,7 @@ object ReglasHuerto {
         esFechaIsoValida(fechaSiembra) &&
             esFechaIsoValida(fechaCosechaEstimada) &&
             fechaCosechaEstimada >= fechaSiembra
+
+    fun frecuenciaRiegoValida(frecuenciaDias: String): Boolean =
+        frecuenciaDias.toIntOrNull()?.let { it > 0 } == true
 }

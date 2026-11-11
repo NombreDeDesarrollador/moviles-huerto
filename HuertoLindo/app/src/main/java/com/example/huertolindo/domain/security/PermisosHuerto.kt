@@ -56,12 +56,15 @@ object PermisosHuerto {
 
     fun puedeActualizarEstadoProblema(perfil: String?, nuevoEstado: String): Boolean =
         esAdministrador(perfil) &&
-            nuevoEstado in setOf("Pendiente", "En atención", "Resuelto")
+            nuevoEstado in setOf("Informado", "En revisión", "Atendido", "Cerrado")
 
     fun tareasAtrasadas(tareas: List<Tarea>, fechaActual: String): List<Tarea> =
         tareas.filter { tarea ->
-            tarea.estado != "Completada" &&
+            tarea.estado !in setOf("Completada", "Validada") &&
                 ReglasHuerto.esFechaIsoValida(tarea.fechaProgramada) &&
                 tarea.fechaProgramada < fechaActual
         }
+
+    fun esTareaCompletada(estado: String): Boolean =
+        estado == "Completada" || estado == "Validada"
 }

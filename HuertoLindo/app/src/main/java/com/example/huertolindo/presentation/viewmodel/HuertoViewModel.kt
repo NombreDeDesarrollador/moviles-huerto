@@ -13,6 +13,7 @@ import com.example.huertolindo.domain.repository.HuertoSnapshot
 import com.example.huertolindo.domain.security.PermisosHuerto
 import com.example.huertolindo.domain.security.ReglasHuerto
 import com.example.huertolindo.domain.security.PasswordHasher
+import com.example.huertolindo.domain.security.EvidenciaNoSeguraException
 import com.example.huertolindo.presentation.state.HuertoUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ import org.json.JSONException
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class HuertoViewModel(
@@ -90,6 +92,22 @@ class HuertoViewModel(
         get() {
             val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(java.util.Date())
             return PermisosHuerto.tareasAtrasadas(tareasVisibles, hoy)
+        }
+
+    val cultivosConRiegoPendiente: List<Cultivo>
+        get() {
+            val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+            val fechaActual = parsearFecha(hoy) ?: return emptyList()
+            return listaCultivos.value.filter { cultivo ->
+                val frecuencia = cultivo.frecuenciaRiego.toIntOrNull() ?: return@filter false
+                val fechaSiembra = parsearFecha(cultivo.fechaSiembra) ?: return@filter false
+                if (frecuencia <= 0 || fechaActual.before(fechaSiembra) ||
+                    cultivo.estadoDesarrollo == "Cosechado"
+                ) return@filter false
+                val dias = ((fechaActual.time - fechaSiembra.time) / MILLIS_POR_DIA).toInt()
+                dias % frecuencia == 0
+            }
+
         }
 
     val historialVisible: List<ActividadTarea>
@@ -256,8 +274,11 @@ class HuertoViewModel(
                         imagenUri.toString()
                     )
                 }
+            } catch (exception: EvidenciaNoSeguraException) {
+                onResult(exception.message)
+                return@launch
             } catch (exception: IOException) {
-                onResult("No se pudo guardar la fotografía. Inténtalo nuevamente.")
+                onResult(exception.message ?: "No se pudo guardar la fotografía. Inténtalo nuevamente.")
                 return@launch
             } catch (exception: SecurityException) {
                 onResult("No se pudo acceder a la fotografía seleccionada.")
@@ -362,9 +383,11 @@ class HuertoViewModel(
                 }
                 _evidenciasTareas.value = evidenciasTareas.value + evidencia
                 onResult(null)
+            } catch (exception: EvidenciaNoSeguraException) {
+                onResult(exception.message)
             } catch (exception: IOException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar la fotografía.", exception)
-                onResult("No se pudo guardar la fotografía. Inténtalo nuevamente.")
+                onResult(exception.message ?: "No se pudo guardar la fotografía. Inténtalo nuevamente.")
             } catch (exception: SecurityException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo leer la fotografía seleccionada.", exception)
                 onResult("No se pudo acceder a la fotografía seleccionada.")
@@ -447,13 +470,35 @@ class HuertoViewModel(
         return true
     }
 
+    fun fechaProximoRiego(cultivo: Cultivo): String? {
+        val frecuencia = cultivo.frecuenciaRiego.toIntOrNull()?.takeIf { it > 0 } ?: return null
+        val fechaSiembra = parsearFecha(cultivo.fechaSiembra) ?: return null
+        val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        val fechaActual = parsearFecha(hoy) ?: return null
+        if (cultivo.estadoDesarrollo == "Cosechado" || fechaActual.before(fechaSiembra)) return null
+        val dias = ((fechaActual.time - fechaSiembra.time) / MILLIS_POR_DIA).toInt()
+        val diasHastaRiego = (frecuencia - dias % frecuencia) % frecuencia
+        val proximo = java.util.Calendar.getInstance().apply {
+            time = fechaActual
+            add(java.util.Calendar.DAY_OF_YEAR, diasHastaRiego)
+        }.time
+        return SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(proximo)
+    }
+
+    fun actualizarEstadoReporte(
+        reporteId: String,
+        nuevoEstado: String,
+        comentario: String,
+        onResult: (String?) -> Unit = {}
+    ) = actualizarEstadoProblema(reporteId, nuevoEstado, comentario, onResult)
+
     fun validarTarea(tareaId: String): Boolean {
         val administrador = usuarioActual ?: return false
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         if (!PermisosHuerto.puedeValidarTarea(administrador.perfil, administrador.id, tarea)) {
             return false
         }
-        val actualizada = tarea.copy(estado = "Completada")
+        val actualizada = tarea.copy(estado = "Validada")
         actualizarTarea(actualizada)
         val validacion = Validacion(
             id = java.util.UUID.randomUUID().toString(),
@@ -462,7 +507,7 @@ class HuertoViewModel(
             resultado = "Validada",
             fechaValidacion = fechaActualConHora()
         )
-        val actividad = registrarActividad(actualizada, "Validó la tarea", "Completada")
+        val actividad = registrarActividad(actualizada, "Validó la tarea", "Validada")
         actividad?.let {
             persistir {
                 huertoRepository.validarTarea(actualizada, validacion, it, administrador)
@@ -536,38 +581,50 @@ class HuertoViewModel(
         sectorId: String,
         usuarioId: String,
         fechaProgramada: String,
-        tipo: String = TipoTarea.MANTENIMIENTO
+        tipo: String = TipoTarea.MANTENIMIENTO,
+        cultivoId: String? = null
     ): Boolean {
+        val asignados = if (usuarioId.startsWith(GROUP_ASSIGNMENT_PREFIX)) {
+            val grupo = usuarioId.removePrefix(GROUP_ASSIGNMENT_PREFIX)
+            usuariosDisponibles.value.filter {
+                it.perfil == PermisosHuerto.ESTUDIANTE && it.tallerAsignado == grupo
+            }
+        } else {
+            usuariosDisponibles.value.filter { it.id == usuarioId && it.perfil == "estudiante" }
+        }
         if (!esAdministrador ||
             titulo.isBlank() || descripcion.isBlank() ||
             !ReglasHuerto.esFechaIsoValida(fechaProgramada) ||
             !TipoTarea.esValido(tipo) ||
             listaSectores.value.none { it.id == sectorId } ||
-            usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == "estudiante" }
+            asignados.isEmpty() ||
+            (cultivoId != null && listaCultivos.value.none {
+                it.id == cultivoId && it.sectorId == sectorId
+            })
         ) return false
 
         val actor = usuarioActual ?: return false
-        val estudiante = usuariosDisponibles.value.firstOrNull { it.id == usuarioId } ?: return false
         val sector = listaSectores.value.firstOrNull { it.id == sectorId } ?: return false
-        val tarea = Tarea(
-            id = java.util.UUID.randomUUID().toString(),
-            titulo = titulo.trim(),
-            descripcion = descripcion.trim(),
-            sectorId = sectorId,
-            asignadoA = usuarioId,
-            estado = "Pendiente",
-            fechaProgramada = fechaProgramada.trim(),
-            tipo = tipo
-        )
-        _listaTareas.value = listaTareas.value + tarea
-        val actividad = registrarActividad(
-            tarea,
-            "Creó y asignó la tarea",
-            "Pendiente",
-            usuarioId
-        )
-        actividad?.let {
-            persistir { huertoRepository.crearTarea(tarea, sector, estudiante, actor, it) }
+        val tareasCreadas = asignados.map { estudiante ->
+            Tarea(
+                id = java.util.UUID.randomUUID().toString(),
+                titulo = titulo.trim(),
+                descripcion = descripcion.trim(),
+                sectorId = sectorId,
+                asignadoA = estudiante.id,
+                estado = "Pendiente",
+                fechaProgramada = fechaProgramada.trim(),
+                tipo = tipo,
+                cultivoId = cultivoId
+            ) to estudiante
+        }
+        _listaTareas.value = listaTareas.value + tareasCreadas.map { it.first }
+        tareasCreadas.forEach { (tarea, estudiante) ->
+            registrarActividad(tarea, "Creó y asignó la tarea", "Pendiente", estudiante.id)?.let {
+                persistir {
+                    huertoRepository.crearTarea(tarea, sector, estudiante, actor, it)
+                }
+            }
         }
         return true
     }
@@ -579,7 +636,8 @@ class HuertoViewModel(
         sectorId: String,
         usuarioId: String,
         fechaProgramada: String,
-        tipo: String? = null
+        tipo: String? = null,
+        cultivoId: String? = null
     ): Boolean {
         val tarea = listaTareas.value.firstOrNull { it.id == tareaId } ?: return false
         val tipoActualizado = tipo ?: tarea.tipo
@@ -590,8 +648,12 @@ class HuertoViewModel(
             listaSectores.value.none { it.id == sectorId } ||
             usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == PermisosHuerto.ESTUDIANTE }
         ) return false
+        if (cultivoId != null && listaCultivos.value.none {
+                it.id == cultivoId && it.sectorId == sectorId
+            }
+        ) return false
 
-        if (tarea.estado == "Completada") return false
+        if (PermisosHuerto.esTareaCompletada(tarea.estado)) return false
 
         val tareaActualizada = tarea.copy(
                 titulo = titulo.trim(),
@@ -600,6 +662,7 @@ class HuertoViewModel(
                 asignadoA = usuarioId,
                 fechaProgramada = fechaProgramada.trim(),
                 tipo = tipoActualizado,
+                cultivoId = cultivoId,
                 estado = "Pendiente",
                 motivoRechazo = ""
             )
@@ -618,6 +681,8 @@ class HuertoViewModel(
         sectorId: String,
         cultivoId: String?,
         prioridad: String,
+        tipoProblema: String,
+        fotografia: Uri?,
         onResult: (String?) -> Unit
     ) {
         val usuario = usuarioActual ?: run {
@@ -629,9 +694,11 @@ class HuertoViewModel(
         if (descripcion.isBlank() ||
             sector == null ||
             (cultivoId != null && (cultivo == null || cultivo.sectorId != sectorId)) ||
-            prioridad !in setOf("Baja", "Media", "Alta")
+            prioridad !in setOf("Baja", "Media", "Alta") ||
+            tipoProblema !in TIPOS_PROBLEMA ||
+            fotografia == null
         ) {
-            onResult("Revisa la descripción, el sector, el cultivo y la prioridad.")
+            onResult("Completa los datos y adjunta una fotografía.")
             return
         }
 
@@ -643,17 +710,26 @@ class HuertoViewModel(
             usuarioId = usuario.id,
             descripcion = descripcion.trim(),
             prioridad = prioridad,
-            estado = "Pendiente",
-            fechaReporte = fecha
+            estado = "Informado",
+            fechaReporte = fecha,
+            tipoProblema = tipoProblema
         )
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    huertoRepository.insertarReporte(reporte, sector, cultivo, usuario)
+                    huertoRepository.insertarReporte(reporte, sector, cultivo, usuario, fotografia)
                 }
                 cargarReportesProblema()
+                refrescarSnapshot()
                 _errorReportesProblemas.value = null
                 onResult(null)
+            } catch (exception: EvidenciaNoSeguraException) {
+                _errorReportesProblemas.value = exception.message
+                onResult(exception.message)
+            } catch (exception: IOException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo guardar la fotografía del reporte.", exception)
+                _errorReportesProblemas.value = "No se pudo guardar la fotografía del reporte."
+                onResult(errorReportesProblemas)
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar el reporte del huerto.", exception)
                 _errorReportesProblemas.value = "No se pudo guardar el reporte en la base de datos."
@@ -693,6 +769,7 @@ class HuertoViewModel(
     fun actualizarEstadoProblema(
         reporteId: String,
         nuevoEstado: String,
+        comentarioSeguimiento: String = "",
         onResult: (String?) -> Unit = {}
     ) {
         if (!PermisosHuerto.puedeActualizarEstadoProblema(usuarioActual?.perfil, nuevoEstado)) {
@@ -704,14 +781,30 @@ class HuertoViewModel(
             onResult("El reporte ya no está disponible.")
             return
         }
-        if (reporte.estado == nuevoEstado) {
+        if (reporte.estado == nuevoEstado && comentarioSeguimiento.isBlank()) {
             onResult(null)
+            return
+        }
+        if (comentarioSeguimiento.isBlank()) {
+            onResult("Agrega un comentario de seguimiento para registrar el cambio.")
             return
         }
         viewModelScope.launch {
             try {
+                val actualizado = reporte.copy(
+                    estado = nuevoEstado,
+                    comentarioSeguimiento = listOf(
+                        reporte.comentarioSeguimiento,
+                        "${fechaActualConHora()} · ${usuarioActual?.nombreCompleto ?: "Administrador"}: ${comentarioSeguimiento.trim()}"
+                    ).filter(String::isNotBlank).joinToString("\n"),
+                    fechaResolucion = if (nuevoEstado in setOf("Atendido", "Cerrado")) {
+                        fechaActualConHora()
+                    } else {
+                        ""
+                    }
+                )
                 withContext(Dispatchers.IO) {
-                    huertoRepository.actualizarReporte(reporte.copy(estado = nuevoEstado))
+                    huertoRepository.actualizarReporte(actualizado)
                 }
                 cargarReportesProblema()
                 onResult(null)
@@ -738,18 +831,26 @@ class HuertoViewModel(
         nombre: String,
         ubicacion: String,
         descripcion: String,
-        estado: String
+        estado: String,
+        fechaInicioMantenimiento: String = "",
+        fechaTerminoMantenimiento: String = ""
     ): Boolean {
         if (!esAdministrador || nombre.isBlank() || ubicacion.isBlank() ||
             descripcion.isBlank() ||
-            estado !in setOf("Disponible", "En uso", "Inactivo")
+            !estadoSectorValido(estado, fechaInicioMantenimiento, fechaTerminoMantenimiento)
         ) return false
         val sector = Sector(
             id = java.util.UUID.randomUUID().toString(),
             nombre = nombre.trim(),
             descripcion = descripcion.trim(),
             estado = estado,
-            ubicacion = ubicacion.trim()
+            ubicacion = ubicacion.trim(),
+            fechaInicioMantenimiento = fechaInicioMantenimiento.trim().takeIf {
+                estado == "En mantenimiento"
+            }.orEmpty(),
+            fechaTerminoMantenimiento = fechaTerminoMantenimiento.trim().takeIf {
+                estado == "En mantenimiento"
+            }.orEmpty()
         )
         _listaSectores.value = listaSectores.value + sector
         persistir { huertoRepository.guardarSector(sector) }
@@ -761,17 +862,25 @@ class HuertoViewModel(
         nombre: String,
         ubicacion: String,
         descripcion: String,
-        estado: String
+        estado: String,
+        fechaInicioMantenimiento: String = "",
+        fechaTerminoMantenimiento: String = ""
     ): Boolean {
         if (!esAdministrador || nombre.isBlank() || ubicacion.isBlank() || descripcion.isBlank() ||
-            estado !in setOf("Disponible", "En uso", "Inactivo")
+            !estadoSectorValido(estado, fechaInicioMantenimiento, fechaTerminoMantenimiento)
         ) return false
         val sector = listaSectores.value.firstOrNull { it.id == sectorId } ?: return false
         val actualizado = sector.copy(
             nombre = nombre.trim(),
             ubicacion = ubicacion.trim(),
             descripcion = descripcion.trim(),
-            estado = estado
+            estado = estado,
+            fechaInicioMantenimiento = fechaInicioMantenimiento.trim().takeIf {
+                estado == "En mantenimiento"
+            }.orEmpty(),
+            fechaTerminoMantenimiento = fechaTerminoMantenimiento.trim().takeIf {
+                estado == "En mantenimiento"
+            }.orEmpty()
         )
         _listaSectores.value = listaSectores.value.map {
             if (it.id == sectorId) actualizado else it
@@ -805,7 +914,8 @@ class HuertoViewModel(
         if (!esAdministrador || nombre.isBlank() ||
             !ReglasHuerto.fechaCosechaValida(fechaSiembra, fechaCosechaEstimada) ||
             !EstadoCultivo.esValido(estadoDesarrollo) ||
-            frecuenciaRiego.isBlank() ||
+            estadoDesarrollo !in setOf("Planificado", "Sembrado") ||
+            !ReglasHuerto.frecuenciaRiegoValida(frecuenciaRiego) ||
             listaSectores.value.none { it.id == sectorId }
         ) return false
 
@@ -836,7 +946,7 @@ class HuertoViewModel(
             nombre.isBlank() ||
             !ReglasHuerto.fechaCosechaValida(fechaSiembra, fechaCosechaEstimada) ||
             !EstadoCultivo.esValido(estadoDesarrollo) ||
-            frecuenciaRiego.isBlank()
+            !ReglasHuerto.frecuenciaRiegoValida(frecuenciaRiego)
         ) return false
         val cultivo = listaCultivos.value.firstOrNull { it.id == cultivoId } ?: return false
         val actualizado = cultivo.copy(
@@ -844,7 +954,12 @@ class HuertoViewModel(
             fechaSiembra = fechaSiembra.trim(),
             fechaCosechaEstimada = fechaCosechaEstimada.trim(),
             estadoDesarrollo = estadoDesarrollo,
-            frecuenciaRiego = frecuenciaRiego.trim()
+            frecuenciaRiego = frecuenciaRiego.trim(),
+            fechaCambioEstado = if (cultivo.estadoDesarrollo != estadoDesarrollo) {
+                fechaActualConHora()
+            } else {
+                cultivo.fechaCambioEstado
+            }
         )
         _listaCultivos.value = listaCultivos.value.map {
             if (it.id == cultivoId) actualizado else it
@@ -854,7 +969,10 @@ class HuertoViewModel(
     }
 
     fun eliminarCultivo(cultivoId: String): Boolean {
-        if (!esAdministrador || reportesProblemas.value.any { it.cultivoId == cultivoId }) return false
+        if (!esAdministrador ||
+            reportesProblemas.value.any { it.cultivoId == cultivoId } ||
+            listaTareas.value.any { it.cultivoId == cultivoId }
+        ) return false
         val cultivosActualizados = listaCultivos.value.filterNot { it.id == cultivoId }
         if (cultivosActualizados.size == listaCultivos.value.size) return false
         val cultivo = listaCultivos.value.first { it.id == cultivoId }
@@ -924,6 +1042,16 @@ class HuertoViewModel(
     private fun fechaActualConHora(): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(java.util.Date())
 
+    private fun estadoSectorValido(estado: String, inicio: String, termino: String): Boolean =
+        when (estado) {
+            "En mantenimiento" -> ReglasHuerto.fechaCosechaValida(inicio, termino)
+            "Disponible", "En uso", "Inactivo" -> true
+            else -> false
+        }
+
+    private fun parsearFecha(fecha: String): Date? =
+        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }.parse(fecha)
+
     private fun persistir(operacion: suspend () -> Unit) {
         viewModelScope.launch {
             try {
@@ -972,6 +1100,7 @@ class HuertoViewModel(
         apellido: String,
         correo: String,
         password: String,
+        tallerAsignado: String = "General",
         onResult: (ResultadoRegistro) -> Unit
     ) {
         viewModelScope.launch {
@@ -984,7 +1113,7 @@ class HuertoViewModel(
                             nombre = nombre.trim(),
                             correo = correo.trim().lowercase(Locale.ROOT),
                             perfil = "estudiante",
-                            tallerAsignado = "General",
+                            tallerAsignado = tallerAsignado.trim(),
                             apellido = apellido.trim(),
                             passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
                             passwordHash = Base64.encodeToString(
@@ -1083,5 +1212,11 @@ class HuertoViewModel(
         data object CorreoYaRegistrado : ResultadoRegistroAdministrador
         data object NoAutorizado : ResultadoRegistroAdministrador
         data object ErrorDeBaseDeDatos : ResultadoRegistroAdministrador
+    }
+
+    companion object {
+        const val GROUP_ASSIGNMENT_PREFIX = "grupo:"
+        const val MILLIS_POR_DIA = 86_400_000L
+        val TIPOS_PROBLEMA = setOf("Falta de agua", "Daño", "Plaga simulada", "Otro")
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.example.huertolindo.presentation.components.DashboardActionGrid
 import com.example.huertolindo.presentation.components.DashboardActionItem
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
+import com.example.huertolindo.domain.security.PermisosHuerto
 
 @Composable
 fun AdminDashboardScreen(
@@ -38,7 +39,9 @@ fun AdminDashboardScreen(
     onReportsClick: () -> Unit = {},
     onProblemsClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
-    onAdministratorsClick: () -> Unit = {}
+    onAdministratorsClick: () -> Unit = {},
+    onCalendarClick: () -> Unit = {},
+    onGalleryClick: () -> Unit = {}
 ) {
     val uiState = collectHuertoUiState(viewModel)
     Column(
@@ -71,10 +74,20 @@ fun AdminDashboardScreen(
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
                 "${uiState.sectores.size} sectores  ·  ${uiState.cultivos.size} cultivos  ·  " +
-                    "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas pendientes",
+                    "${viewModel.tareasVisibles.count { !PermisosHuerto.esTareaCompletada(it.estado) }} tareas pendientes",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+        AnimatedVisibility(viewModel.cultivosConRiegoPendiente.isNotEmpty()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Riegos pendientes", style = MaterialTheme.typography.titleMedium)
+                    viewModel.cultivosConRiegoPendiente.forEach { cultivo ->
+                        Text("${cultivo.nombreComun} · sector programado para regar hoy")
+                    }
+                }
+            }
         }
         AnimatedVisibility(viewModel.tareasAtrasadas.isNotEmpty()) {
             ElevatedCard(
@@ -101,7 +114,9 @@ fun AdminDashboardScreen(
                 DashboardActionItem("Sensores", "🌡️", onSensorsClick),
                 DashboardActionItem("Problemas", "🪲", onProblemsClick),
                 DashboardActionItem("Reportes", "📊", onReportsClick),
-                DashboardActionItem("Administradores", "👥", onAdministratorsClick)
+                DashboardActionItem("Administradores", "👥", onAdministratorsClick),
+                DashboardActionItem("Calendario", "🗓️", onCalendarClick),
+                DashboardActionItem("Galería", "🖼️", onGalleryClick)
             )
         )
         Spacer(Modifier.height(8.dp))

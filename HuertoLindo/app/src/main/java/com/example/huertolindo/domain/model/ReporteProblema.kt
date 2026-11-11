@@ -9,5 +9,8 @@ data class ReporteProblema(
     val descripcion: String,
     val prioridad: String,
     val estado: String,
-    val fechaReporte: String = ""
+    val fechaReporte: String = "",
+    val tipoProblema: String = "Otro",
+    val comentarioSeguimiento: String = "",
+    val fechaResolucion: String = ""
 )

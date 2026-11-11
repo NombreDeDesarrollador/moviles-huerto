@@ -48,7 +48,8 @@ fun Cultivo.toEntity() = CultivoEntity(
     fechaSiembra = fechaSiembra,
     estadoDesarrollo = estadoDesarrollo,
     frecuenciaRiego = frecuenciaRiego,
-    fechaCosechaEstimada = fechaCosechaEstimada
+    fechaCosechaEstimada = fechaCosechaEstimada,
+    fechaCambioEstado = fechaCambioEstado
 )
 
 fun CultivoEntity.toDomain() = Cultivo(
@@ -58,7 +59,8 @@ fun CultivoEntity.toDomain() = Cultivo(
     fechaSiembra = fechaSiembra,
     estadoDesarrollo = estadoDesarrollo,
     frecuenciaRiego = frecuenciaRiego,
-    fechaCosechaEstimada = fechaCosechaEstimada
+    fechaCosechaEstimada = fechaCosechaEstimada,
+    fechaCambioEstado = fechaCambioEstado
 )
 
 fun Evidencia.toEntity() = EvidenciaEntity(
@@ -91,7 +93,10 @@ fun ReporteProblema.toEntity() = ReporteProblemaEntity(
     descripcion = descripcion,
     prioridad = prioridad,
     estado = estado,
-    fechaReporte = fechaReporte
+    fechaReporte = fechaReporte,
+    tipoProblema = tipoProblema,
+    comentarioSeguimiento = comentarioSeguimiento,
+    fechaResolucion = fechaResolucion
 )
 
 fun ReporteProblemaEntity.toDomain() = ReporteProblema(
@@ -102,7 +107,10 @@ fun ReporteProblemaEntity.toDomain() = ReporteProblema(
     descripcion = descripcion,
     prioridad = prioridad,
     estado = estado,
-    fechaReporte = fechaReporte
+    fechaReporte = fechaReporte,
+    tipoProblema = tipoProblema,
+    comentarioSeguimiento = comentarioSeguimiento,
+    fechaResolucion = fechaResolucion
 )
 
 fun Sector.toEntity() = SectorEntity(
@@ -110,7 +118,9 @@ fun Sector.toEntity() = SectorEntity(
     nombre = nombre,
     descripcion = descripcion,
     estado = estado,
-    ubicacion = ubicacion
+    ubicacion = ubicacion,
+    fechaInicioMantenimiento = fechaInicioMantenimiento,
+    fechaTerminoMantenimiento = fechaTerminoMantenimiento
 )
 
 fun SectorEntity.toDomain() = Sector(
@@ -118,7 +128,9 @@ fun SectorEntity.toDomain() = Sector(
     nombre = nombre,
     descripcion = descripcion,
     estado = estado,
-    ubicacion = ubicacion
+    ubicacion = ubicacion,
+    fechaInicioMantenimiento = fechaInicioMantenimiento,
+    fechaTerminoMantenimiento = fechaTerminoMantenimiento
 )
 
 fun Tarea.toEntity() = TareaEntity(
@@ -130,7 +142,8 @@ fun Tarea.toEntity() = TareaEntity(
     estado = estado,
     fechaProgramada = fechaProgramada,
     motivoRechazo = motivoRechazo,
-    tipo = tipo
+    tipo = tipo,
+    cultivoId = cultivoId
 )
 
 fun TareaEntity.toDomain() = Tarea(
@@ -142,7 +155,8 @@ fun TareaEntity.toDomain() = Tarea(
     estado = estado,
     fechaProgramada = fechaProgramada,
     motivoRechazo = motivoRechazo,
-    tipo = tipo
+    tipo = tipo,
+    cultivoId = cultivoId
 )
 
 fun Usuario.toEntity() = UsuarioEntity(

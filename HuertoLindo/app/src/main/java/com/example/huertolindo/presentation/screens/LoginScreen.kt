@@ -112,6 +112,22 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        Text("Cuentas ficticias para demostración")
+        TextButton(
+            onClick = {
+                correo = "docente@huertolindo.test"
+                password = "HuertoDocente2026!"
+                mensajeError = null
+            }
+        ) { Text("Usar cuenta docente de prueba") }
+        TextButton(
+            onClick = {
+                correo = "estudiante@huertolindo.test"
+                password = "HuertoEstudiante2026!"
+                mensajeError = null
+            }
+        ) { Text("Usar cuenta estudiante de prueba") }
+
         Button(
             onClick = {
                 if (correo.isBlank() || password.isBlank()) {

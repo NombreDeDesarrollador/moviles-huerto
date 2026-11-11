@@ -9,6 +9,7 @@ import com.example.huertolindo.domain.model.Tarea
 import com.example.huertolindo.domain.model.TipoAsociacionEvidencia
 import com.example.huertolindo.domain.model.Usuario
 import com.example.huertolindo.domain.model.Validacion
+import android.net.Uri
 
 data class HuertoSnapshot(
     val sectores: List<Sector>,
@@ -65,7 +66,8 @@ interface HuertoRepository {
         reporte: ReporteProblema,
         sector: Sector,
         cultivo: Cultivo?,
-        usuario: Usuario
+        usuario: Usuario,
+        fotografia: Uri
     )
     suspend fun obtenerReportesProblema(usuarioId: String?): List<ReporteProblema>
     suspend fun actualizarReporte(reporte: ReporteProblema)

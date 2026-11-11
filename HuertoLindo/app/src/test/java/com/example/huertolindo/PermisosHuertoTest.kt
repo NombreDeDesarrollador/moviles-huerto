@@ -231,19 +231,25 @@ class PermisosHuertoTest {
         assertTrue(
             PermisosHuerto.puedeActualizarEstadoProblema(
                 PermisosHuerto.ADMINISTRADOR,
-                "En atención"
+                "En revisión"
             )
         )
         assertFalse(
             PermisosHuerto.puedeActualizarEstadoProblema(
                 PermisosHuerto.ESTUDIANTE,
-                "Resuelto"
+                "Atendido"
+            )
+        )
+        assertTrue(
+            PermisosHuerto.puedeActualizarEstadoProblema(
+                PermisosHuerto.ADMINISTRADOR,
+                "Cerrado"
             )
         )
         assertFalse(
             PermisosHuerto.puedeActualizarEstadoProblema(
                 PermisosHuerto.ADMINISTRADOR,
-                "Cerrado"
+                "Estado inválido"
             )
         )
     }
@@ -260,6 +266,7 @@ class PermisosHuertoTest {
             Tarea("hoy", "Poda", "Podar", "sector-1", "estudiante-1", "Pendiente", "2026-10-16"),
             Tarea("futura", "Siembra", "Sembrar", "sector-1", "estudiante-1", "Pendiente", "2026-10-17"),
             Tarea("hecha", "Limpieza", "Limpiar", "sector-1", "estudiante-1", "Completada", "2026-10-10"),
+            Tarea("validada", "Riego", "Regar", "sector-1", "estudiante-1", "Validada", "2026-10-09"),
             Tarea("sin-fecha", "Observación", "Observar", "sector-1", "estudiante-1", "Pendiente"),
             Tarea("fecha-invalida", "Poda", "Podar", "sector-1", "estudiante-1", "Pendiente", "2026-99-99")
         )
@@ -268,6 +275,15 @@ class PermisosHuertoTest {
             listOf(tareasConFechas.first()),
             PermisosHuerto.tareasAtrasadas(tareasConFechas, "2026-10-16")
         )
+    }
+
+    @Test
+    fun tareasAtrasadasExcluyeTareasValidadas() {
+        val validada = Tarea(
+            "validada", "Riego", "Regar", "sector-1", "estudiante-1", "Validada", "2026-10-09"
+        )
+
+        assertTrue(PermisosHuerto.tareasAtrasadas(listOf(validada), "2026-10-16").isEmpty())
     }
 
     @Test

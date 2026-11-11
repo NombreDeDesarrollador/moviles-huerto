@@ -2,6 +2,9 @@ package com.example.huertolindo.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.FaceDetector
 import android.util.Base64
 import androidx.room.withTransaction
 import com.example.huertolindo.data.local.HuertoDatabase
@@ -21,6 +24,7 @@ import com.example.huertolindo.domain.model.Validacion
 import com.example.huertolindo.domain.repository.HuertoRepository
 import com.example.huertolindo.domain.repository.HuertoSnapshot
 import com.example.huertolindo.domain.security.PasswordHasher
+import com.example.huertolindo.domain.security.EvidenciaNoSeguraException
 import com.example.huertolindo.domain.security.PermisosHuerto
 import org.json.JSONArray
 import org.json.JSONException
@@ -50,6 +54,31 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     }
 
     private suspend fun inicializar(usuarios: List<Usuario>) {
+        val cuentasDemo = listOf(
+            Triple("demo-docente", "docente@huertolindo.test", "HuertoDocente2026!"),
+            Triple("demo-estudiante", "estudiante@huertolindo.test", "HuertoEstudiante2026!")
+        ).filter { (id, _, _) -> database.usuarioDao().obtenerPorId(id) == null }
+            .map { (id, correo, password) ->
+                val perfil = if (id == "demo-docente") {
+                    PermisosHuerto.ADMINISTRADOR
+                } else {
+                    PermisosHuerto.ESTUDIANTE
+                }
+                val salt = PasswordHasher.createSalt()
+                Usuario(
+                    id = id,
+                    nombre = if (perfil == PermisosHuerto.ADMINISTRADOR) "Docente Demo" else "Estudiante Demo",
+                    apellido = "Huerto",
+                    correo = correo,
+                    perfil = perfil,
+                    tallerAsignado = "Demo",
+                    passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
+                    passwordHash = Base64.encodeToString(
+                        PasswordHasher.hash(password, salt),
+                        Base64.NO_WRAP
+                    )
+                )
+            }
         database.withTransaction {
             usuarios.forEach { usuario ->
                 val normalizado = usuario.copy(correo = usuario.correo.trim().lowercase(Locale.ROOT))
@@ -62,6 +91,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                     )
                 }
             }
+            cuentasDemo.forEach { database.usuarioDao().asegurar(it.toEntity()) }
 
             if (!preferences.getBoolean(DEMO_DATA_INITIALIZED, false)) {
                 val snapshot = cargarSnapshot()
@@ -197,20 +227,24 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         cultivoId: String? = null,
         reporteId: String? = null
     ): Evidencia {
+        val bitmap = decodificarFotografiaSinRostros(imagenUri)
         val carpeta = File(context.filesDir, "evidencias")
         if (!carpeta.exists() && !carpeta.mkdirs()) {
+            bitmap.recycle()
             throw IOException("No se pudo crear el directorio de evidencias.")
         }
+
         val archivo = File(carpeta, "${UUID.randomUUID()}.jpg")
-        val input = context.contentResolver.openInputStream(imagenUri)
-            ?: throw IOException("No se pudo abrir la fotografía.")
         var copiaCompleta = false
         try {
-            input.use { origen ->
-                archivo.outputStream().use { destino -> origen.copyTo(destino) }
+            archivo.outputStream().use { destino ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 90, destino)) {
+                    throw IOException("No se pudo procesar la fotografía.")
+                }
             }
             copiaCompleta = true
         } finally {
+            bitmap.recycle()
             if (!copiaCompleta) archivo.delete()
         }
         return Evidencia(
@@ -223,6 +257,52 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             descripcion = descripcion,
             fechaRegistro = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(Date())
         )
+    }
+
+    private fun decodificarFotografiaSinRostros(uri: Uri): Bitmap {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, bounds)
+        } ?: throw IOException("No se pudo analizar la fotografía seleccionada.")
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IOException("La fotografía seleccionada no tiene un formato compatible.")
+        }
+        var sampleSize = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sampleSize > 1600) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, options)
+        } ?: throw IOException("No se pudo analizar la fotografía seleccionada.")
+        val ancho = bitmap.width - bitmap.width % 2
+        val alto = bitmap.height - bitmap.height % 2
+        if (ancho <= 0 || alto <= 0) {
+            bitmap.recycle()
+            throw IOException("La fotografía seleccionada no tiene un tamaño válido.")
+        }
+        val compatible = if (ancho == bitmap.width && alto == bitmap.height) {
+            bitmap
+        } else {
+            Bitmap.createBitmap(bitmap, 0, 0, ancho, alto).also { bitmap.recycle() }
+        }
+        var fotografiaValida = false
+        try {
+            if (FaceDetector(ancho, alto, 1)
+                    .findFaces(compatible, arrayOfNulls(1)) > 0
+            ) {
+                throw EvidenciaNoSeguraException(
+                    "No se admiten fotografías con rostros detectados. Usa imágenes de plantas o herramientas."
+                )
+            }
+            fotografiaValida = true
+            return compatible
+        } finally {
+            if (!fotografiaValida) compatible.recycle()
+        }
     }
 
     override suspend fun eliminarEvidencia(evidencia: Evidencia) {
@@ -364,13 +444,25 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         reporte: ReporteProblema,
         sector: Sector,
         cultivo: Cultivo?,
-        usuario: Usuario
+        usuario: Usuario,
+        fotografia: Uri
     ) {
-        database.withTransaction {
-            database.sectorDao().asegurar(sector.toEntity())
-            cultivo?.let { database.cultivoDao().asegurar(it.toEntity()) }
-            database.usuarioDao().asegurar(usuario.toEntity())
-            database.reporteProblemaDao().insertar(reporte.toEntity())
+        val evidencia = copiarEvidenciaLocal(
+            fotografia,
+            descripcion = "Imagen referencial de ${reporte.tipoProblema}",
+            reporteId = reporte.id
+        )
+        try {
+            database.withTransaction {
+                database.sectorDao().asegurar(sector.toEntity())
+                cultivo?.let { database.cultivoDao().asegurar(it.toEntity()) }
+                database.usuarioDao().asegurar(usuario.toEntity())
+                database.reporteProblemaDao().insertar(reporte.toEntity())
+                database.evidenciaDao().insertar(evidencia.toEntity())
+            }
+        } catch (exception: RuntimeException) {
+            eliminarArchivoEvidencia(evidencia.rutaArchivo)
+            throw exception
         }
     }
 
@@ -408,15 +500,15 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
 
         val cultivosDemo = listOf(
             Cultivo(
-                "1", "Lechuga", "1", "2026-09-20", "En crecimiento", "Cada 2 días",
+                "1", "Lechuga", "1",                 "2026-09-20", "En crecimiento", "2",
                 "2026-11-20"
             ),
             Cultivo(
-                "2", "Espinaca", "1", "2026-09-25", "En crecimiento", "Cada 2 días",
+                "2", "Espinaca", "1",                 "2026-09-25", "En crecimiento", "2",
                 "2026-11-25"
             ),
             Cultivo(
-                "3", "Zanahoria", "2", "2026-09-10", "Desarrollo", "Cada 3 días",
+                "3", "Zanahoria", "2",                 "2026-09-10", "Desarrollo", "3",
                 "2026-12-10"
             )
         )
@@ -427,7 +519,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                 titulo = "Regar cultivos",
                 descripcion = "Aplicar agua en la base de cada planta",
                 sectorId = "1",
-                asignadoA = "student-vicente",
+                asignadoA = "demo-estudiante",
                 estado = "Pendiente",
                 fechaProgramada = "2026-10-17"
             ),
@@ -436,7 +528,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                 titulo = "Revisar zanahorias",
                 descripcion = "Verificar humedad y retirar malezas",
                 sectorId = "2",
-                asignadoA = "student-matias",
+                asignadoA = "demo-estudiante",
                 estado = "Pendiente",
                 fechaProgramada = "2026-10-18"
             )

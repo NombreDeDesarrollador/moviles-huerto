@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.example.huertolindo.presentation.components.DashboardActionGrid
 import com.example.huertolindo.presentation.components.DashboardActionItem
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
+import com.example.huertolindo.domain.security.PermisosHuerto
 
 @Composable
 fun EstudianteDashboardScreen(
@@ -34,7 +35,9 @@ fun EstudianteDashboardScreen(
     onTasksClick: () -> Unit = {},
     onSensorsClick: () -> Unit = {},
     onProblemsClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {}
+    onHistoryClick: () -> Unit = {},
+    onCalendarClick: () -> Unit = {},
+    onGalleryClick: () -> Unit = {}
 ) {
     val uiState = collectHuertoUiState(viewModel)
     Column(
@@ -66,10 +69,20 @@ fun EstudianteDashboardScreen(
         }
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "${viewModel.tareasVisibles.count { it.estado != "Completada" }} tareas por realizar",
+                "${viewModel.tareasVisibles.count { !PermisosHuerto.esTareaCompletada(it.estado) }} tareas por realizar",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+        AnimatedVisibility(viewModel.cultivosConRiegoPendiente.isNotEmpty()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Riegos pendientes", style = MaterialTheme.typography.titleMedium)
+                    viewModel.cultivosConRiegoPendiente.forEach { cultivo ->
+                        Text("${cultivo.nombreComun} · corresponde regar hoy")
+                    }
+                }
+            }
         }
         if (viewModel.tareasAtrasadas.isNotEmpty()) {
             ElevatedCard(onClick = onTasksClick, modifier = Modifier.fillMaxWidth()) {
@@ -87,7 +100,9 @@ fun EstudianteDashboardScreen(
                 DashboardActionItem("Mis tareas", "🧤", onTasksClick),
                 DashboardActionItem("Historial", "📋", onHistoryClick),
                 DashboardActionItem("Sensores", "🌡️", onSensorsClick),
-                DashboardActionItem("Reportar problema", "🪲", onProblemsClick)
+                DashboardActionItem("Reportar problema", "🪲", onProblemsClick),
+                DashboardActionItem("Calendario", "🗓️", onCalendarClick),
+                DashboardActionItem("Galería", "🖼️", onGalleryClick)
             )
         )
         Spacer(Modifier.padding(bottom = 8.dp))

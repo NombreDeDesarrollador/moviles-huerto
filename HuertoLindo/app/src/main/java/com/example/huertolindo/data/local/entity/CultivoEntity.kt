@@ -24,5 +24,7 @@ data class CultivoEntity(
     @ColumnInfo(name = "estado_desarrollo") val estadoDesarrollo: String,
     @ColumnInfo(name = "frecuencia_riego") val frecuenciaRiego: String,
     @ColumnInfo(name = "fecha_cosecha_estimada", defaultValue = "''")
-    val fechaCosechaEstimada: String = ""
+    val fechaCosechaEstimada: String = "",
+    @ColumnInfo(name = "fecha_cambio_estado", defaultValue = "''")
+    val fechaCambioEstado: String = ""
 )

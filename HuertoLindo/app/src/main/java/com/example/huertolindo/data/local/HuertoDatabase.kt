@@ -182,7 +182,7 @@ interface ReporteProblemaDao {
         ReporteProblemaEntity::class,
         ActividadTareaEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {
@@ -314,6 +314,28 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE cultivos ADD COLUMN fecha_cambio_estado TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE sectores ADD COLUMN fecha_inicio_mantenimiento TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE sectores ADD COLUMN fecha_termino_mantenimiento TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE tareas ADD COLUMN cultivo_id TEXT")
+        db.execSQL("ALTER TABLE reporte_problemas ADD COLUMN tipo_problema TEXT NOT NULL DEFAULT 'Otro'")
+        db.execSQL("ALTER TABLE reporte_problemas ADD COLUMN comentario_seguimiento TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE reporte_problemas ADD COLUMN fecha_resolucion TEXT NOT NULL DEFAULT ''")
+        db.execSQL(
+            "UPDATE cultivos SET frecuencia_riego = trim(replace(replace(replace(" +
+                "frecuencia_riego, 'Cada ', ''), ' días', ''), ' día', ''))"
+        )
+        db.execSQL(
+            "UPDATE reporte_problemas SET estado = CASE estado " +
+                "WHEN 'Pendiente' THEN 'Informado' " +
+                "WHEN 'En atención' THEN 'En revisión' " +
+                "WHEN 'Resuelto' THEN 'Atendido' ELSE estado END"
+        )
+    }
+}
+
 object HuertoDatabaseProvider {
     @Volatile
     private var INSTANCE: HuertoDatabase? = null
@@ -330,7 +352,8 @@ object HuertoDatabaseProvider {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
-                    MIGRATION_5_6
+                    MIGRATION_5_6,
+                    MIGRATION_6_7
                 )
                 .build()
             INSTANCE = instance

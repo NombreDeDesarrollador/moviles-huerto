@@ -33,5 +33,6 @@ data class TareaEntity(
     @ColumnInfo(name = "fecha_programada") val fechaProgramada: String = "",
     @ColumnInfo(name = "motivo_rechazo") val motivoRechazo: String = "",
     @ColumnInfo(name = "tipo", defaultValue = "'Mantenimiento'")
-    val tipo: String = TipoTarea.MANTENIMIENTO
+    val tipo: String = TipoTarea.MANTENIMIENTO,
+    @ColumnInfo(name = "cultivo_id") val cultivoId: String? = null
 )

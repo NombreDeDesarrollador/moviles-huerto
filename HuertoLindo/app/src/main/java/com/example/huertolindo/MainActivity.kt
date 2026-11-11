@@ -24,6 +24,8 @@ import com.example.huertolindo.presentation.screens.DetalleCultivoScreen
 import com.example.huertolindo.presentation.screens.DetalleTareaScreen
 import com.example.huertolindo.presentation.screens.DetalleSectorScreen
 import com.example.huertolindo.presentation.screens.HistorialActividadesScreen
+import com.example.huertolindo.presentation.screens.CalendarioHuertoScreen
+import com.example.huertolindo.presentation.screens.GaleriaHuertoScreen
 import com.example.huertolindo.presentation.screens.LoginScreen
 import com.example.huertolindo.presentation.screens.ReportesProblemasScreen
 import com.example.huertolindo.presentation.screens.ReportesScreen
@@ -115,7 +117,9 @@ class MainActivity : ComponentActivity() {
                                     onReportsClick = { pantallaActual = "reportes" },
                                     onProblemsClick = { pantallaActual = "problemas" },
                                     onHistoryClick = { pantallaActual = "historial" },
-                                    onAdministratorsClick = { pantallaActual = "administradores" }
+                                    onAdministratorsClick = { pantallaActual = "administradores" },
+                                    onCalendarClick = { pantallaActual = "calendario" },
+                                    onGalleryClick = { pantallaActual = "galeria" }
                                 )
                             } else {
                                 EstudianteDashboardScreen(
@@ -125,7 +129,9 @@ class MainActivity : ComponentActivity() {
                                     onTasksClick = { pantallaActual = "tareas" },
                                     onSensorsClick = { pantallaActual = "sensores" },
                                     onProblemsClick = { pantallaActual = "problemas" },
-                                    onHistoryClick = { pantallaActual = "historial" }
+                                    onHistoryClick = { pantallaActual = "historial" },
+                                    onCalendarClick = { pantallaActual = "calendario" },
+                                    onGalleryClick = { pantallaActual = "galeria" }
                                 )
                             }
                         }
@@ -191,6 +197,14 @@ class MainActivity : ComponentActivity() {
                             onBack = { pantallaActual = "menu" }
                         )
                         "historial" -> HistorialActividadesScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "calendario" -> CalendarioHuertoScreen(
+                            viewModel = huertoViewModel,
+                            onBack = { pantallaActual = "menu" }
+                        )
+                        "galeria" -> GaleriaHuertoScreen(
                             viewModel = huertoViewModel,
                             onBack = { pantallaActual = "menu" }
                         )

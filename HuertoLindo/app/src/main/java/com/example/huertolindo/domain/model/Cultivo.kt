@@ -8,5 +8,6 @@ data class Cultivo(
     val fechaSiembra: String,
     val estadoDesarrollo: String,
     val frecuenciaRiego: String,
-    val fechaCosechaEstimada: String = ""
+    val fechaCosechaEstimada: String = "",
+    val fechaCambioEstado: String = ""
 )

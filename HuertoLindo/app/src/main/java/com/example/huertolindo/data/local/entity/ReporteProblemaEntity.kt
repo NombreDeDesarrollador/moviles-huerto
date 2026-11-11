@@ -38,5 +38,10 @@ data class ReporteProblemaEntity(
     @ColumnInfo(name = "descripcion") val descripcion: String,
     @ColumnInfo(name = "prioridad") val prioridad: String,
     @ColumnInfo(name = "estado") val estado: String,
-    @ColumnInfo(name = "fecha_reporte") val fechaReporte: String = ""
+    @ColumnInfo(name = "fecha_reporte") val fechaReporte: String = "",
+    @ColumnInfo(name = "tipo_problema", defaultValue = "'Otro'") val tipoProblema: String = "Otro",
+    @ColumnInfo(name = "comentario_seguimiento", defaultValue = "''")
+    val comentarioSeguimiento: String = "",
+    @ColumnInfo(name = "fecha_resolucion", defaultValue = "''")
+    val fechaResolucion: String = ""
 )

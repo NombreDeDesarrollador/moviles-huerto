@@ -49,8 +49,10 @@ import com.example.huertolindo.domain.model.Tarea
 import com.example.huertolindo.domain.model.TipoAsociacionEvidencia
 import com.example.huertolindo.domain.model.TipoTarea
 import com.example.huertolindo.domain.model.Usuario
+import com.example.huertolindo.domain.security.PermisosHuerto
 import com.example.huertolindo.presentation.components.HuertoStatusChip
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
+import java.io.File
 
 @Composable
 fun SectoresScreen(
@@ -86,6 +88,9 @@ fun SectoresScreen(
                     Text(sector.descripcion)
                     HuertoStatusChip(sector.estado)
                     Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
+                    if (sector.estado == "En mantenimiento") {
+                        Text("Mantenimiento: ${sector.fechaInicioMantenimiento} al ${sector.fechaTerminoMantenimiento}")
+                    }
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
                             sectorEnEdicion = sector
@@ -107,10 +112,10 @@ fun SectoresScreen(
                 mostrarFormulario = false
                 sectorEnEdicion = null
             },
-            onSave = { nombre, ubicacion, descripcion, estado ->
+            onSave = { nombre, ubicacion, descripcion, estado, inicio, termino ->
                 val guardado = sectorEnEdicion?.let {
-                    viewModel.editarSector(it.id, nombre, ubicacion, descripcion, estado)
-                } ?: viewModel.agregarSector(nombre, ubicacion, descripcion, estado)
+                    viewModel.editarSector(it.id, nombre, ubicacion, descripcion, estado, inicio, termino)
+                } ?: viewModel.agregarSector(nombre, ubicacion, descripcion, estado, inicio, termino)
                 if (guardado) {
                     error = null
                     mostrarFormulario = false
@@ -248,7 +253,13 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
             Text("Estado de desarrollo:")
             HuertoStatusChip(cultivo.estadoDesarrollo)
         }
-        Text("Frecuencia de riego: ${cultivo.frecuenciaRiego}")
+        Text("Frecuencia de riego: cada ${cultivo.frecuenciaRiego} días")
+        viewModel.fechaProximoRiego(cultivo)?.let { fecha ->
+            Text("Próximo riego programado: $fecha")
+        }
+        if (cultivo.fechaCambioEstado.isNotBlank()) {
+            Text("Estado actualizado: ${cultivo.fechaCambioEstado}")
+        }
         EvidenciaFotograficaSection(
             titulo = "Registro fotográfico del cultivo",
             evidencias = viewModel.evidenciasDeCultivo(cultivo.id),
@@ -288,7 +299,13 @@ fun TareasScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val tareas = viewModel.tareasVisibles
     val tareasFiltradas = tareas.filter { tarea ->
-        (estadoFiltro.isBlank() || tarea.estado == estadoFiltro) &&
+        (estadoFiltro.isBlank() ||
+            when (estadoFiltro) {
+                "Atrasadas" -> viewModel.tareasAtrasadas.any { it.id == tarea.id }
+                "Realizadas" -> PermisosHuerto.esTareaCompletada(tarea.estado)
+                "Pendientes" -> !PermisosHuerto.esTareaCompletada(tarea.estado)
+                else -> tarea.estado == estadoFiltro
+            }) &&
             (fechaFiltro.isBlank() || tarea.fechaProgramada == fechaFiltro.trim()) &&
             (responsableFiltro.isBlank() || tarea.asignadoA == responsableFiltro)
     }
@@ -323,7 +340,7 @@ fun TareasScreen(
         CampoSeleccion(
             etiqueta = "Estado",
             opciones = listOf("" to "Todos los estados") +
-                listOf("Pendiente", "En desarrollo", "Por validar", "Rechazada", "Completada")
+                listOf("Pendientes", "Realizadas", "Atrasadas", "Pendiente", "En desarrollo", "Por validar", "Rechazada", "Validada", "Completada")
                     .map { it to it },
             seleccionado = estadoFiltro,
             onSeleccionar = { estadoFiltro = it }
@@ -377,7 +394,10 @@ fun TareasScreen(
                     if (viewModel.tareasAtrasadas.any { it.id == tarea.id }) {
                         HuertoStatusChip("Atrasada")
                     }
-                    if (esAdministrador && tarea.estado != "Completada") {
+                    if (tarea.cultivoId != null) {
+                        Text("Cultivo: ${uiState.cultivos.firstOrNull { it.id == tarea.cultivoId }?.nombreComun ?: "No disponible"}")
+                    }
+                    if (esAdministrador && !PermisosHuerto.esTareaCompletada(tarea.estado)) {
                         OutlinedButton(onClick = {
                             tareaEnEdicion = tarea
                             mostrarFormulario = true
@@ -398,19 +418,20 @@ fun TareasScreen(
     if (mostrarFormulario) {
         FormularioTarea(
             sectores = uiState.sectores,
+            cultivos = uiState.cultivos,
             estudiantes = uiState.usuariosDisponibles.filter { it.perfil == "estudiante" },
             tarea = tareaEnEdicion,
             onDismiss = {
                 mostrarFormulario = false
                 tareaEnEdicion = null
             },
-            onSave = { titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo ->
+            onSave = { titulo, instrucciones, sectorId, cultivoId, usuarioId, fechaProgramada, tipo ->
                 val guardada = tareaEnEdicion?.let { tarea ->
                     viewModel.editarTarea(
-                        tarea.id, titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo
+                        tarea.id, titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo, cultivoId
                     )
                 } ?: viewModel.crearTarea(
-                    titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo
+                    titulo, instrucciones, sectorId, usuarioId, fechaProgramada, tipo, cultivoId
                 )
                 if (guardada) {
                     error = null
@@ -548,6 +569,9 @@ fun DetalleTareaScreen(
             style = MaterialTheme.typography.bodyLarge
         )
         Text("Sector: ${sector?.nombre ?: "No asignado"}")
+        tarea.cultivoId?.let { cultivoId ->
+            Text("Cultivo: ${uiState.cultivos.firstOrNull { it.id == cultivoId }?.nombreComun ?: "No disponible"}")
+        }
         Text("Asignada a: ${estudiante?.nombreCompleto ?: tarea.asignadoA}")
         if (evidencias.any { it.descripcion.isNotBlank() }) {
             Text("Comentario de entrega", style = MaterialTheme.typography.titleMedium)
@@ -741,6 +765,7 @@ fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
     ScreenLayout("Sensores del huerto", onBack) {
         Text("Lecturas de demostración; no corresponden a sensores físicos.")
+        Text("Las alertas son informativas: no activan bombas ni riego automático.")
         uiState.sectores.forEach { sector ->
             val lectura = if (sector.id == "1") {
                 SensorSimulado(sector.id, 62.0, 21.5, 54.0)
@@ -754,6 +779,9 @@ fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     Text("Temperatura ambiental: ${lectura.temperaturaAmbiental} °C")
                     Text("Humedad ambiental: ${lectura.humedadAmbiental}%")
                     Text(lectura.origen, style = MaterialTheme.typography.bodySmall)
+                    if (lectura.humedadSuelo < 50.0) {
+                        HuertoStatusChip("Bajo · pendiente de revisión")
+                    }
                 }
             }
         }
@@ -770,8 +798,14 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
         } else {
             ReporteDato("Sectores", uiState.sectores.size.toString())
             ReporteDato("Cultivos activos", uiState.cultivos.size.toString())
-            ReporteDato("Tareas completadas", tareas.count { it.estado == "Completada" }.toString())
-            ReporteDato("Tareas pendientes", tareas.count { it.estado != "Completada" }.toString())
+            ReporteDato(
+                "Tareas completadas",
+                tareas.count { PermisosHuerto.esTareaCompletada(it.estado) }.toString()
+            )
+            ReporteDato(
+                "Tareas pendientes",
+                tareas.count { !PermisosHuerto.esTareaCompletada(it.estado) }.toString()
+            )
             Text(
                 "Este resumen se actualiza al cambiar el estado de las tareas.",
                 style = MaterialTheme.typography.bodyMedium
@@ -782,24 +816,267 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 
 @Composable
 fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
-    collectHuertoUiState(viewModel)
+    val uiState = collectHuertoUiState(viewModel)
+    var sectorFiltro by remember { mutableStateOf("") }
+    var cultivoFiltro by remember { mutableStateOf("") }
+    var desde by remember { mutableStateOf("") }
+    var hasta by remember { mutableStateOf("") }
     ScreenLayout("Historial de actividades", onBack) {
-        val actividades = viewModel.historialVisible
-        if (actividades.isEmpty()) {
+        CampoSeleccion(
+            etiqueta = "Sector",
+            opciones = listOf("" to "Todos los sectores") + uiState.sectores.map { it.id to it.nombre },
+            seleccionado = sectorFiltro,
+            onSeleccionar = {
+                sectorFiltro = it
+                cultivoFiltro = ""
+            }
+        )
+        CampoSeleccion(
+            etiqueta = "Cultivo",
+            opciones = listOf("" to "Todos los cultivos") +
+                uiState.cultivos.filter { sectorFiltro.isBlank() || it.sectorId == sectorFiltro }
+                    .map { it.id to it.nombreComun },
+            seleccionado = cultivoFiltro,
+            onSeleccionar = { cultivoFiltro = it }
+        )
+        OutlinedTextField(
+            value = desde,
+            onValueChange = { desde = it },
+            label = { Text("Desde (AAAA-MM-DD)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = hasta,
+            onValueChange = { hasta = it },
+            label = { Text("Hasta (AAAA-MM-DD)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        val tareas = viewModel.tareasVisibles.associateBy { it.id }
+        val reportes = uiState.reportesProblemas.filter {
+            viewModel.esAdministrador || it.usuarioId == uiState.usuarioActual?.id
+        }
+        val items = buildList {
+            viewModel.historialVisible.forEach { actividad ->
+                val tarea = tareas[actividad.tareaId]
+                add(
+                    HistorialItem(
+                        actividad.tituloTarea,
+                        actividad.accion,
+                        actividad.estado,
+                        actividad.fecha,
+                        tarea?.sectorId.orEmpty(),
+                        tarea?.cultivoId
+                    )
+                )
+            }
+            uiState.validaciones.forEach { validacion ->
+                val tarea = tareas[validacion.tareaId] ?: return@forEach
+                add(
+                    HistorialItem(
+                        tarea.titulo,
+                        "${validacion.resultado}: ${validacion.observaciones}".trimEnd(),
+                        validacion.resultado,
+                        validacion.fechaValidacion,
+                        tarea.sectorId,
+                        tarea.cultivoId
+                    )
+                )
+            }
+            uiState.evidencias.forEach { evidencia ->
+                val tarea = evidencia.tareaId?.let(tareas::get)
+                val cultivo = uiState.cultivos.firstOrNull { it.id == evidencia.cultivoId }
+                val reporte = reportes.firstOrNull { it.id == evidencia.reporteId }
+                if (evidencia.tareaId != null && tarea == null) return@forEach
+                if (evidencia.reporteId != null && reporte == null) return@forEach
+                add(
+                    HistorialItem(
+                        "Fotografía adjunta",
+                        evidencia.descripcion.ifBlank { "Evidencia fotográfica agregada" },
+                        "Registrada",
+                        evidencia.fechaRegistro,
+                        tarea?.sectorId ?: cultivo?.sectorId ?: reporte?.sectorId.orEmpty(),
+                        tarea?.cultivoId ?: cultivo?.id ?: reporte?.cultivoId,
+                        evidencia.rutaArchivo
+                    )
+                )
+            }
+            reportes.forEach { reporte ->
+                add(
+                    HistorialItem(
+                        "Problema: ${reporte.tipoProblema}",
+                        "Reportado: ${reporte.descripcion}",
+                        reporte.estado,
+                        reporte.fechaReporte,
+                        reporte.sectorId,
+                        reporte.cultivoId
+                    )
+                )
+                reporte.comentarioSeguimiento.lineSequence()
+                    .filter(String::isNotBlank)
+                    .forEach { nota ->
+                        add(
+                            HistorialItem(
+                                "Seguimiento de problema",
+                                nota,
+                                reporte.estado,
+                                nota.take(19),
+                                reporte.sectorId,
+                                reporte.cultivoId
+                            )
+                        )
+                    }
+                if (reporte.fechaResolucion.isNotBlank()) {
+                    add(
+                        HistorialItem(
+                            "Resolución de problema",
+                            reporte.comentarioSeguimiento,
+                            reporte.estado,
+                            reporte.fechaResolucion,
+                            reporte.sectorId,
+                            reporte.cultivoId
+                        )
+                    )
+                }
+            }
+            uiState.cultivos.filter { it.fechaCambioEstado.isNotBlank() }.forEach { cultivo ->
+                add(
+                    HistorialItem(
+                        "Cambio de estado: ${cultivo.nombreComun}",
+                        "El cultivo cambió a ${cultivo.estadoDesarrollo}",
+                        cultivo.estadoDesarrollo,
+                        cultivo.fechaCambioEstado,
+                        cultivo.sectorId,
+                        cultivo.id
+                    )
+                )
+            }
+            uiState.sectores.filter { it.estado == "En mantenimiento" }.forEach { sector ->
+                listOf(
+                    "Inicio" to sector.fechaInicioMantenimiento,
+                    "Término" to sector.fechaTerminoMantenimiento
+                ).filter { it.second.isNotBlank() }.forEach { (evento, fecha) ->
+                    add(
+                        HistorialItem(
+                            "$evento de mantenimiento: ${sector.nombre}",
+                            "Sector en mantenimiento",
+                            sector.estado,
+                            fecha,
+                            sector.id,
+                            null
+                        )
+                    )
+                }
+            }
+        }.filter { item ->
+            (sectorFiltro.isBlank() || item.sectorId == sectorFiltro) &&
+                (cultivoFiltro.isBlank() || item.cultivoId == cultivoFiltro) &&
+                (desde.isBlank() || item.fecha.take(10) >= desde.trim()) &&
+                (hasta.isBlank() || item.fecha.take(10) <= hasta.trim())
+        }.sortedByDescending { it.fecha }
+
+        if (items.isEmpty()) {
             Text("Todavía no hay actividades registradas.")
         }
-        actividades.forEach { actividad ->
+        items.forEach { item ->
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(actividad.tituloTarea, style = MaterialTheme.typography.titleMedium)
-                    Text(actividad.accion)
-                    HuertoStatusChip(actividad.estado)
-                    Text("Realizado por: ${actividad.nombreUsuario}")
-                    Text("Fecha: ${actividad.fecha}")
+                    Text(item.titulo, style = MaterialTheme.typography.titleMedium)
+                    Text(item.descripcion)
+                    HuertoStatusChip(item.estado)
+                    Text("Fecha: ${item.fecha}")
+                    item.foto?.let { ruta ->
+                        AsyncImage(
+                            model = Uri.fromFile(File(ruta)),
+                            contentDescription = "Fotografía del historial",
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+private data class HistorialItem(
+    val titulo: String,
+    val descripcion: String,
+    val estado: String,
+    val fecha: String,
+    val sectorId: String,
+    val cultivoId: String?,
+    val foto: String? = null
+)
+
+@Composable
+fun CalendarioHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
+    val hoy = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+        .format(java.util.Date())
+    ScreenLayout("Próximos eventos del huerto", onBack) {
+        Text("Cosechas estimadas", style = MaterialTheme.typography.titleLarge)
+        val cosechas = uiState.cultivos.filter {
+            it.estadoDesarrollo != "Cosechado" &&
+                it.fechaCosechaEstimada.isNotBlank() &&
+                it.fechaCosechaEstimada >= hoy
+        }.sortedBy { it.fechaCosechaEstimada }
+        cosechas.forEach { cultivo ->
+            val sector = uiState.sectores.firstOrNull { it.id == cultivo.sectorId }
+            Text("${cultivo.nombreComun} · ${cultivo.fechaCosechaEstimada} · ${sector?.nombre ?: "Sector"}")
+        }
+        if (cosechas.isEmpty()) Text("No hay cosechas próximas registradas.")
+        Text("Mantenimientos programados", style = MaterialTheme.typography.titleLarge)
+        val mantenimientos = uiState.sectores.filter {
+            it.estado == "En mantenimiento" &&
+                it.fechaTerminoMantenimiento >= hoy
+        }.sortedBy { it.fechaInicioMantenimiento }
+        mantenimientos.forEach { sector ->
+            Text("${sector.nombre} · ${sector.fechaInicioMantenimiento} al ${sector.fechaTerminoMantenimiento}")
+        }
+        if (mantenimientos.isEmpty()) Text("No hay mantenimientos próximos registrados.")
+    }
+}
+
+@Composable
+fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
+    ScreenLayout("Galería del huerto", onBack) {
+        Text("Imágenes de demostración de plantas y herramientas; no se admiten rostros.")
+        val tareasVisibles = viewModel.tareasVisibles.map { it.id }.toSet()
+        val evidencias = uiState.evidencias.filter { evidencia ->
+            when {
+                evidencia.tareaId != null -> evidencia.tareaId in tareasVisibles
+                evidencia.reporteId != null -> viewModel.esAdministrador ||
+                    uiState.reportesProblemas.any {
+                        it.id == evidencia.reporteId && it.usuarioId == uiState.usuarioActual?.id
+                    }
+                else -> true
+            }
+        }.sortedByDescending { it.fechaRegistro }
+        if (evidencias.isEmpty()) Text("Todavía no hay fotografías registradas.")
+        evidencias.forEach { evidencia ->
+            val titulo = when {
+                evidencia.tareaId != null ->
+                    uiState.tareas.firstOrNull { it.id == evidencia.tareaId }?.titulo ?: "Tarea"
+                evidencia.cultivoId != null ->
+                    uiState.cultivos.firstOrNull { it.id == evidencia.cultivoId }?.nombreComun ?: "Cultivo"
+                evidencia.reporteId != null -> "Reporte de problema"
+                else -> "Registro fotográfico"
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(titulo, style = MaterialTheme.typography.titleMedium)
+                Text("Fecha: ${evidencia.fechaRegistro}")
+                AsyncImage(
+                    model = Uri.fromFile(File(evidencia.rutaArchivo)),
+                    contentDescription = "Fotografía del huerto",
+                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    contentScale = ContentScale.Crop
+                )
             }
         }
     }
@@ -810,6 +1087,8 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
     var mostrarFormulario by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var seguimiento by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var estadoFiltro by remember { mutableStateOf("") }
 
     ScreenLayout(
         if (viewModel.esAdministrador) "Problemas del huerto" else "Mis reportes de problemas",
@@ -822,6 +1101,15 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         uiState.errorReportesProblemas?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
+        }
+        if (viewModel.esAdministrador) {
+            CampoSeleccion(
+                etiqueta = "Filtrar por estado",
+                opciones = listOf("" to "Todos") +
+                    listOf("Informado", "En revisión", "Atendido", "Cerrado").map { it to it },
+                seleccionado = estadoFiltro,
+                onSeleccionar = { estadoFiltro = it }
+            )
         }
         if (uiState.cargandoReportesProblemas) {
             androidx.compose.material3.CircularProgressIndicator()
@@ -841,7 +1129,7 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                 else "Todavía no has reportado problemas."
             )
         }
-        reportes.forEach { reporte ->
+        reportes.filter { estadoFiltro.isBlank() || it.estado == estadoFiltro }.forEach { reporte ->
             val sector = uiState.sectores.firstOrNull { it.id == reporte.sectorId }
             val cultivo = uiState.cultivos.firstOrNull { it.id == reporte.cultivoId }
             val reportante = uiState.usuariosDisponibles
@@ -853,6 +1141,7 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(reporte.descripcion, style = MaterialTheme.typography.titleMedium)
+                    Text("Tipo: ${reporte.tipoProblema}")
                     Text("Sector: ${sector?.nombre ?: "No disponible"}")
                     Text("Cultivo: ${cultivo?.nombreComun ?: "No especificado"}")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -883,20 +1172,41 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                         }
                     )
                     if (viewModel.esAdministrador) {
+                        OutlinedTextField(
+                            value = seguimiento[reporte.id].orEmpty(),
+                            onValueChange = { seguimiento = seguimiento + (reporte.id to it) },
+                            label = { Text("Comentario de seguimiento") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
                         CampoSeleccion(
                             etiqueta = "Cambiar estado",
                             opciones = listOf(
-                                "Pendiente" to "Pendiente",
-                                "En atención" to "En atención",
-                                "Resuelto" to "Resuelto"
+                                "Informado" to "Informado",
+                                "En revisión" to "En revisión",
+                                "Atendido" to "Atendido",
+                                "Cerrado" to "Cerrado"
                             ),
                             seleccionado = reporte.estado,
                             onSeleccionar = {
-                                viewModel.actualizarEstadoProblema(reporte.id, it) { errorEstado ->
+                                viewModel.actualizarEstadoReporte(
+                                    reporte.id,
+                                    it,
+                                    seguimiento[reporte.id].orEmpty()
+                                ) { errorEstado ->
                                     error = errorEstado
+                                    if (errorEstado == null) {
+                                        seguimiento = seguimiento - reporte.id
+                                    }
                                 }
                             }
                         )
+                        if (reporte.fechaResolucion.isNotBlank()) {
+                            Text("Resolución/cierre: ${reporte.fechaResolucion}")
+                        }
+                        if (reporte.comentarioSeguimiento.isNotBlank()) {
+                            Text("Seguimiento: ${reporte.comentarioSeguimiento}")
+                        }
                     }
                 }
             }
@@ -908,12 +1218,14 @@ fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
             sectores = uiState.sectores,
             cultivos = uiState.cultivos,
             onDismiss = { mostrarFormulario = false },
-            onSave = { descripcion, sectorId, cultivoId, prioridad, onResult ->
+            onSave = { descripcion, sectorId, cultivoId, prioridad, tipoProblema, fotografia, onResult ->
                 viewModel.crearReporteProblema(
                     descripcion,
                     sectorId,
                     cultivoId,
-                    prioridad
+                    prioridad,
+                    tipoProblema,
+                    fotografia
                 ) { resultado ->
                     error = resultado
                     if (resultado == null) mostrarFormulario = false
@@ -929,14 +1241,19 @@ private fun FormularioReporteProblema(
     sectores: List<Sector>,
     cultivos: List<Cultivo>,
     onDismiss: () -> Unit,
-    onSave: (String, String, String?, String, (String?) -> Unit) -> Unit
+    onSave: (String, String, String?, String, String, Uri?, (String?) -> Unit) -> Unit
 ) {
     var descripcion by remember { mutableStateOf("") }
     var sectorId by remember { mutableStateOf("") }
     var cultivoId by remember { mutableStateOf("") }
     var prioridad by remember { mutableStateOf("Media") }
+    var tipoProblema by remember { mutableStateOf("Otro") }
+    var fotografia by remember { mutableStateOf<Uri?>(null) }
     var mostrarError by remember { mutableStateOf(false) }
     var guardando by remember { mutableStateOf(false) }
+    val selectorFotografia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        if (uri != null) fotografia = uri
+    }
     val cultivosDelSector = cultivos.filter { it.sectorId == sectorId }
 
     AlertDialog(
@@ -976,11 +1293,37 @@ private fun FormularioReporteProblema(
                     onSeleccionar = { cultivoId = it }
                 )
                 CampoSeleccion(
+                    etiqueta = "Tipo de problema",
+                    opciones = HuertoViewModel.TIPOS_PROBLEMA.map { it to it },
+                    seleccionado = tipoProblema,
+                    onSeleccionar = { tipoProblema = it }
+                )
+                CampoSeleccion(
                     etiqueta = "Prioridad",
                     opciones = listOf("Baja", "Media", "Alta").map { it to it },
                     seleccionado = prioridad,
                     onSeleccionar = { prioridad = it }
                 )
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        selectorFotografia.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+                    }
+                ) { Text(if (fotografia == null) "Adjuntar fotografía" else "Cambiar fotografía") }
+                if (mostrarError && fotografia == null) {
+                    Text(
+                        "Adjunta una fotografía referencial para enviar el reporte.",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                fotografia?.let { uri ->
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Vista previa de fotografía del problema",
+                        modifier = Modifier.fillMaxWidth().height(160.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Text("Usa una imagen de prueba de plantas o herramientas; no incluyas rostros ni datos personales.")
                 if (sectores.isEmpty()) {
                     Text("Primero debe existir al menos un sector.")
                 }
@@ -991,10 +1334,17 @@ private fun FormularioReporteProblema(
         },
         confirmButton = {
             TextButton(onClick = {
-                mostrarError = descripcion.isBlank() || sectorId.isBlank()
+                mostrarError = descripcion.isBlank() || sectorId.isBlank() || fotografia == null
                 if (!mostrarError && !guardando) {
                     guardando = true
-                    onSave(descripcion, sectorId, cultivoId.ifBlank { null }, prioridad) {
+                    onSave(
+                        descripcion,
+                        sectorId,
+                        cultivoId.ifBlank { null },
+                        prioridad,
+                        tipoProblema,
+                        fotografia
+                    ) {
                         guardando = false
                         if (it != null) mostrarError = true
                     }
@@ -1028,12 +1378,18 @@ private fun ReporteDato(etiqueta: String, valor: String) {
 private fun FormularioSector(
     sector: Sector? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Boolean
+    onSave: (String, String, String, String, String, String) -> Boolean
 ) {
     var nombre by remember(sector?.id) { mutableStateOf(sector?.nombre.orEmpty()) }
     var ubicacion by remember(sector?.id) { mutableStateOf(sector?.ubicacion.orEmpty()) }
     var descripcion by remember(sector?.id) { mutableStateOf(sector?.descripcion.orEmpty()) }
     var estado by remember(sector?.id) { mutableStateOf(sector?.estado ?: "Disponible") }
+    var inicioMantenimiento by remember(sector?.id) {
+        mutableStateOf(sector?.fechaInicioMantenimiento.orEmpty())
+    }
+    var terminoMantenimiento by remember(sector?.id) {
+        mutableStateOf(sector?.fechaTerminoMantenimiento.orEmpty())
+    }
     var mostrarError by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1062,10 +1418,32 @@ private fun FormularioSector(
                 )
                 CampoSeleccion(
                     etiqueta = "Estado",
-                    opciones = listOf("Disponible", "En uso", "Inactivo").map { it to it },
+                    opciones = listOf("Disponible", "En uso", "Inactivo", "En mantenimiento").map { it to it },
                     seleccionado = estado,
-                    onSeleccionar = { estado = it }
+                    onSeleccionar = {
+                        estado = it
+                        if (it != "En mantenimiento") {
+                            inicioMantenimiento = ""
+                            terminoMantenimiento = ""
+                        }
+                    }
                 )
+                if (estado == "En mantenimiento") {
+                    OutlinedTextField(
+                        value = inicioMantenimiento,
+                        onValueChange = { inicioMantenimiento = it },
+                        label = { Text("Inicio del mantenimiento (AAAA-MM-DD)") },
+                        singleLine = true,
+                        isError = mostrarError
+                    )
+                    OutlinedTextField(
+                        value = terminoMantenimiento,
+                        onValueChange = { terminoMantenimiento = it },
+                        label = { Text("Término del mantenimiento (AAAA-MM-DD)") },
+                        singleLine = true,
+                        isError = mostrarError
+                    )
+                }
                 if (mostrarError) {
                     Text(
                         "Completa el nombre, la ubicación y la descripción.",
@@ -1076,7 +1454,14 @@ private fun FormularioSector(
         },
         confirmButton = {
             TextButton(onClick = {
-                mostrarError = !onSave(nombre, ubicacion, descripcion, estado)
+                mostrarError = !onSave(
+                    nombre,
+                    ubicacion,
+                    descripcion,
+                    estado,
+                    inicioMantenimiento,
+                    terminoMantenimiento
+                )
             }) {
                 Text(if (sector == null) "Guardar" else "Guardar cambios")
             }
@@ -1097,7 +1482,7 @@ private fun FormularioCultivo(
         mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
     }
     var estado by remember(cultivo?.id) {
-        mutableStateOf(cultivo?.estadoDesarrollo ?: "En crecimiento")
+        mutableStateOf(cultivo?.estadoDesarrollo ?: "Planificado")
     }
     var frecuencia by remember(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
     var mostrarError by remember { mutableStateOf(false) }
@@ -1129,14 +1514,18 @@ private fun FormularioCultivo(
                 )
                 CampoSeleccion(
                     etiqueta = "Estado de desarrollo",
-                    opciones = EstadoCultivo.opciones.map { it to it },
+                    opciones = (if (cultivo == null) {
+                        EstadoCultivo.opciones.filter { it in setOf("Planificado", "Sembrado") }
+                    } else {
+                        EstadoCultivo.opciones
+                    }).map { it to it },
                     seleccionado = estado,
                     onSeleccionar = { estado = it }
                 )
                 OutlinedTextField(
                     value = frecuencia,
                     onValueChange = { frecuencia = it },
-                    label = { Text("Frecuencia de riego") },
+                    label = { Text("Frecuencia de riego (días)") },
                     singleLine = true,
                     isError = mostrarError && frecuencia.isBlank()
                 )
@@ -1166,14 +1555,16 @@ private fun FormularioCultivo(
 @Composable
 private fun FormularioTarea(
     sectores: List<Sector>,
+    cultivos: List<Cultivo>,
     estudiantes: List<Usuario>,
     tarea: Tarea? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String, String) -> Boolean
+    onSave: (String, String, String, String?, String, String, String) -> Boolean
 ) {
     var titulo by remember(tarea?.id) { mutableStateOf(tarea?.titulo.orEmpty()) }
     var instrucciones by remember(tarea?.id) { mutableStateOf(tarea?.descripcion.orEmpty()) }
     var sectorId by remember(tarea?.id) { mutableStateOf(tarea?.sectorId.orEmpty()) }
+    var cultivoId by remember(tarea?.id) { mutableStateOf(tarea?.cultivoId) }
     var usuarioId by remember(tarea?.id) { mutableStateOf(tarea?.asignadoA.orEmpty()) }
     var fechaProgramada by remember(tarea?.id) {
         mutableStateOf(tarea?.fechaProgramada.orEmpty())
@@ -1208,11 +1599,27 @@ private fun FormularioTarea(
                     etiqueta = "Sector",
                     opciones = sectores.map { it.id to it.nombre },
                     seleccionado = sectorId,
-                    onSeleccionar = { sectorId = it }
+                    onSeleccionar = {
+                        sectorId = it
+                        if (cultivos.none { cultivo -> cultivo.id == cultivoId && cultivo.sectorId == it }) {
+                            cultivoId = null
+                        }
+                    }
                 )
                 CampoSeleccion(
-                    etiqueta = "Estudiante",
-                    opciones = estudiantes.map { it.id to it.nombreCompleto },
+                    etiqueta = "Cultivo (opcional)",
+                    opciones = listOf("" to "Sin cultivo asociado") +
+                        cultivos.filter { it.sectorId == sectorId }.map { it.id to it.nombreComun },
+                    seleccionado = cultivoId.orEmpty(),
+                    onSeleccionar = { cultivoId = it.ifBlank { null } }
+                )
+                CampoSeleccion(
+                    etiqueta = "Estudiante o grupo",
+                    opciones = estudiantes.map { it.id to it.nombreCompleto } +
+                        if (tarea == null) estudiantes.map { it.tallerAsignado }
+                            .filter(String::isNotBlank).distinct().map {
+                            HuertoViewModel.GROUP_ASSIGNMENT_PREFIX + it to "Grupo: $it"
+                        } else emptyList(),
                     seleccionado = usuarioId,
                     onSeleccionar = { usuarioId = it }
                 )
@@ -1233,6 +1640,7 @@ private fun FormularioTarea(
                     titulo,
                     instrucciones,
                     sectorId,
+                    cultivoId,
                     usuarioId,
                     fechaProgramada,
                     tipo

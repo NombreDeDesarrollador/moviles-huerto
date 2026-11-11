@@ -10,5 +10,6 @@ data class Tarea(
     val estado: String,
     val fechaProgramada: String = "",
     val motivoRechazo: String = "",
-    val tipo: String = TipoTarea.MANTENIMIENTO
+    val tipo: String = TipoTarea.MANTENIMIENTO,
+    val cultivoId: String? = null
 )

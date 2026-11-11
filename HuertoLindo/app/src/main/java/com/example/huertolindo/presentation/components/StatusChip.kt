@@ -16,11 +16,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun HuertoStatusChip(status: String, modifier: Modifier = Modifier) {
     val colors = when (status.lowercase()) {
-        "completada", "resuelto", "listo para cosechar", "disponible" ->
+        "completada", "validada", "atendido", "cerrado", "resuelto",
+        "listo para cosechar", "cosechado", "disponible" ->
             MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        "rechazada", "alta", "atrasada", "inactivo" ->
+        "rechazada", "alta", "atrasada", "inactivo", "bajo · pendiente de revisión" ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        "pendiente", "media", "en uso" ->
+        "pendiente", "pendiente de validación", "informado", "en revisión",
+        "en mantenimiento", "media", "en uso" ->
             MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         else -> MaterialTheme.colorScheme.secondaryContainer to
             MaterialTheme.colorScheme.onSecondaryContainer
