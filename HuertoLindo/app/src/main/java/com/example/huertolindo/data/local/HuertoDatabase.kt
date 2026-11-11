@@ -11,31 +11,31 @@ import androidx.room.RoomDatabase
 import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.huertolindo.data.model.ActividadTarea
-import com.example.huertolindo.data.model.Cultivo
-import com.example.huertolindo.data.model.Evidencia
-import com.example.huertolindo.data.model.ReporteProblema
-import com.example.huertolindo.data.model.Sector
-import com.example.huertolindo.data.model.Tarea
-import com.example.huertolindo.data.model.Usuario
-import com.example.huertolindo.data.model.Validacion
+import com.example.huertolindo.data.local.entity.ActividadTareaEntity
+import com.example.huertolindo.data.local.entity.CultivoEntity
+import com.example.huertolindo.data.local.entity.EvidenciaEntity
+import com.example.huertolindo.data.local.entity.ReporteProblemaEntity
+import com.example.huertolindo.data.local.entity.SectorEntity
+import com.example.huertolindo.data.local.entity.TareaEntity
+import com.example.huertolindo.data.local.entity.UsuarioEntity
+import com.example.huertolindo.data.local.entity.ValidacionEntity
 
 @Dao
 interface UsuarioDao {
     @Query("SELECT * FROM usuarios ORDER BY nombre COLLATE NOCASE")
-    suspend fun obtenerTodos(): List<Usuario>
+    suspend fun obtenerTodos(): List<UsuarioEntity>
 
     @Query("SELECT * FROM usuarios WHERE id = :usuarioId")
-    suspend fun obtenerPorId(usuarioId: String): Usuario?
+    suspend fun obtenerPorId(usuarioId: String): UsuarioEntity?
 
     @Query("SELECT * FROM usuarios WHERE correo = :correo COLLATE NOCASE LIMIT 1")
-    suspend fun obtenerPorCorreo(correo: String): Usuario?
+    suspend fun obtenerPorCorreo(correo: String): UsuarioEntity?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertar(usuario: Usuario)
+    suspend fun insertar(usuario: UsuarioEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun asegurar(usuario: Usuario)
+    suspend fun asegurar(usuario: UsuarioEntity)
 
     @Query(
         """
@@ -51,136 +51,136 @@ interface UsuarioDao {
     )
 
     @Update
-    suspend fun actualizar(usuario: Usuario)
+    suspend fun actualizar(usuario: UsuarioEntity)
 }
 
 @Dao
 interface SectorDao {
     @Query("SELECT * FROM sectores ORDER BY nombre COLLATE NOCASE")
-    suspend fun obtenerTodos(): List<Sector>
+    suspend fun obtenerTodos(): List<SectorEntity>
 
     @Query("SELECT * FROM sectores WHERE id = :sectorId")
-    suspend fun obtenerPorId(sectorId: String): Sector?
+    suspend fun obtenerPorId(sectorId: String): SectorEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(sector: Sector)
+    suspend fun insertar(sector: SectorEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun asegurar(sector: Sector)
+    suspend fun asegurar(sector: SectorEntity)
 
     @Update
-    suspend fun actualizar(sector: Sector)
+    suspend fun actualizar(sector: SectorEntity)
 
     @androidx.room.Delete
-    suspend fun eliminar(sector: Sector)
+    suspend fun eliminar(sector: SectorEntity)
 }
 
 @Dao
 interface CultivoDao {
     @Query("SELECT * FROM cultivos ORDER BY fecha_siembra DESC")
-    suspend fun obtenerTodos(): List<Cultivo>
+    suspend fun obtenerTodos(): List<CultivoEntity>
 
     @Query("SELECT * FROM cultivos WHERE sector_id = :sectorId")
-    suspend fun obtenerPorSector(sectorId: String): List<Cultivo>
+    suspend fun obtenerPorSector(sectorId: String): List<CultivoEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(cultivo: Cultivo)
+    suspend fun insertar(cultivo: CultivoEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun asegurar(cultivo: Cultivo)
+    suspend fun asegurar(cultivo: CultivoEntity)
 
     @Update
-    suspend fun actualizar(cultivo: Cultivo)
+    suspend fun actualizar(cultivo: CultivoEntity)
 
     @androidx.room.Delete
-    suspend fun eliminar(cultivo: Cultivo)
+    suspend fun eliminar(cultivo: CultivoEntity)
 }
 
 @Dao
 interface TareaDao {
     @Query("SELECT * FROM tareas ORDER BY fecha_programada DESC")
-    suspend fun obtenerTodos(): List<Tarea>
+    suspend fun obtenerTodos(): List<TareaEntity>
 
     @Query("SELECT * FROM tareas WHERE usuario_id = :usuarioId ORDER BY fecha_programada DESC")
-    suspend fun obtenerPorUsuario(usuarioId: String): List<Tarea>
+    suspend fun obtenerPorUsuario(usuarioId: String): List<TareaEntity>
 
     @Query("SELECT * FROM tareas WHERE sector_id = :sectorId ORDER BY fecha_programada DESC")
-    suspend fun obtenerPorSector(sectorId: String): List<Tarea>
+    suspend fun obtenerPorSector(sectorId: String): List<TareaEntity>
 
     @Query("SELECT * FROM tareas WHERE id = :tareaId")
-    suspend fun obtenerPorId(tareaId: String): Tarea?
+    suspend fun obtenerPorId(tareaId: String): TareaEntity?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertar(tarea: Tarea)
+    suspend fun insertar(tarea: TareaEntity)
 
     @Update
-    suspend fun actualizar(tarea: Tarea)
+    suspend fun actualizar(tarea: TareaEntity)
 
     @androidx.room.Delete
-    suspend fun eliminar(tarea: Tarea)
+    suspend fun eliminar(tarea: TareaEntity)
 }
 
 @Dao
 interface EvidenciaDao {
     @Query("SELECT * FROM evidencias ORDER BY fecha_registro DESC")
-    suspend fun obtenerTodos(): List<Evidencia>
+    suspend fun obtenerTodos(): List<EvidenciaEntity>
 
     @Query("SELECT * FROM evidencias WHERE tarea_id = :tareaId ORDER BY fecha_registro DESC")
-    suspend fun obtenerPorTarea(tareaId: String): List<Evidencia>
+    suspend fun obtenerPorTarea(tareaId: String): List<EvidenciaEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(evidencia: Evidencia)
+    suspend fun insertar(evidencia: EvidenciaEntity)
 
     @androidx.room.Delete
-    suspend fun eliminar(evidencia: Evidencia)
+    suspend fun eliminar(evidencia: EvidenciaEntity)
 }
 
 @Dao
 interface ValidacionDao {
     @Query("SELECT * FROM validaciones ORDER BY fecha_validacion DESC")
-    suspend fun obtenerTodos(): List<Validacion>
+    suspend fun obtenerTodos(): List<ValidacionEntity>
 
     @Query("SELECT * FROM validaciones WHERE tarea_id = :tareaId ORDER BY fecha_validacion DESC")
-    suspend fun obtenerPorTarea(tareaId: String): List<Validacion>
+    suspend fun obtenerPorTarea(tareaId: String): List<ValidacionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(validacion: Validacion)
+    suspend fun insertar(validacion: ValidacionEntity)
 }
 
 @Dao
 interface ActividadTareaDao {
     @Query("SELECT * FROM actividades_tarea ORDER BY fecha DESC")
-    suspend fun obtenerTodos(): List<ActividadTarea>
+    suspend fun obtenerTodos(): List<ActividadTareaEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(actividad: ActividadTarea)
+    suspend fun insertar(actividad: ActividadTareaEntity)
 }
 
 @Dao
 interface ReporteProblemaDao {
     @Query("SELECT * FROM reporte_problemas ORDER BY fecha_reporte DESC")
-    suspend fun obtenerTodos(): List<ReporteProblema>
+    suspend fun obtenerTodos(): List<ReporteProblemaEntity>
 
     @Query("SELECT * FROM reporte_problemas WHERE usuario_id = :usuarioId ORDER BY fecha_reporte DESC")
-    suspend fun obtenerPorUsuario(usuarioId: String): List<ReporteProblema>
+    suspend fun obtenerPorUsuario(usuarioId: String): List<ReporteProblemaEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertar(reporteProblema: ReporteProblema)
+    suspend fun insertar(reporteProblema: ReporteProblemaEntity)
 
     @Update
-    suspend fun actualizar(reporteProblema: ReporteProblema)
+    suspend fun actualizar(reporteProblema: ReporteProblemaEntity)
 }
 
 @Database(
     entities = [
-        Usuario::class,
-        Sector::class,
-        Cultivo::class,
-        Tarea::class,
-        Evidencia::class,
-        Validacion::class,
-        ReporteProblema::class,
-        ActividadTarea::class
+        UsuarioEntity::class,
+        SectorEntity::class,
+        CultivoEntity::class,
+        TareaEntity::class,
+        EvidenciaEntity::class,
+        ValidacionEntity::class,
+        ReporteProblemaEntity::class,
+        ActividadTareaEntity::class
     ],
     version = 6,
     exportSchema = false

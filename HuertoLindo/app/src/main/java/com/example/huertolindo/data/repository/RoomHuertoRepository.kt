@@ -7,17 +7,21 @@ import androidx.room.withTransaction
 import com.example.huertolindo.data.local.HuertoDatabase
 import com.example.huertolindo.data.local.HuertoDatabaseProvider
 import com.example.huertolindo.data.local.LegacyUsuarioImporter
-import com.example.huertolindo.data.model.ActividadTarea
-import com.example.huertolindo.data.model.Cultivo
-import com.example.huertolindo.data.model.Evidencia
-import com.example.huertolindo.data.model.ReporteProblema
-import com.example.huertolindo.data.model.Sector
-import com.example.huertolindo.data.model.Tarea
-import com.example.huertolindo.data.model.TipoAsociacionEvidencia
-import com.example.huertolindo.data.model.Usuario
-import com.example.huertolindo.data.model.Validacion
-import com.example.huertolindo.data.security.PasswordHasher
-import com.example.huertolindo.data.security.PermisosHuerto
+import com.example.huertolindo.data.local.mapper.toDomain
+import com.example.huertolindo.data.local.mapper.toEntity
+import com.example.huertolindo.domain.model.ActividadTarea
+import com.example.huertolindo.domain.model.Cultivo
+import com.example.huertolindo.domain.model.Evidencia
+import com.example.huertolindo.domain.model.ReporteProblema
+import com.example.huertolindo.domain.model.Sector
+import com.example.huertolindo.domain.model.Tarea
+import com.example.huertolindo.domain.model.TipoAsociacionEvidencia
+import com.example.huertolindo.domain.model.Usuario
+import com.example.huertolindo.domain.model.Validacion
+import com.example.huertolindo.domain.repository.HuertoRepository
+import com.example.huertolindo.domain.repository.HuertoSnapshot
+import com.example.huertolindo.domain.security.PasswordHasher
+import com.example.huertolindo.domain.security.PermisosHuerto
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
@@ -49,7 +53,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         database.withTransaction {
             usuarios.forEach { usuario ->
                 val normalizado = usuario.copy(correo = usuario.correo.trim().lowercase(Locale.ROOT))
-                database.usuarioDao().asegurar(normalizado)
+                database.usuarioDao().asegurar(normalizado.toEntity())
                 if (normalizado.passwordHash.isNotBlank()) {
                     database.usuarioDao().importarCredencialesSiVacias(
                         normalizado.id,
@@ -69,9 +73,9 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                     snapshot.reportesProblemas.isEmpty() &&
                     snapshot.actividades.isEmpty()
                 ) {
-                    sectoresDemo.forEach { database.sectorDao().asegurar(it) }
-                    cultivosDemo.forEach { database.cultivoDao().asegurar(it) }
-                    tareasDemo.forEach { database.tareaDao().insertar(it) }
+                    sectoresDemo.forEach { database.sectorDao().asegurar(it.toEntity()) }
+                    cultivosDemo.forEach { database.cultivoDao().asegurar(it.toEntity()) }
+                    tareasDemo.forEach { database.tareaDao().insertar(it.toEntity()) }
                 }
             }
         }
@@ -79,9 +83,9 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     }
 
     override suspend fun obtenerUsuarios(): List<Usuario> =
-        database.usuarioDao().obtenerTodos().map {
-            it.copy(passwordSalt = "", passwordHash = "")
-        }
+        database.usuarioDao()
+            .obtenerTodos()
+            .map { it.toDomain().copy(passwordSalt = "", passwordHash = "") }
 
     override suspend fun autenticar(correo: String, password: String): Usuario? {
         val usuario = database.usuarioDao()
@@ -93,11 +97,13 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             Base64.decode(usuario.passwordSalt, Base64.NO_WRAP),
             Base64.decode(usuario.passwordHash, Base64.NO_WRAP)
         )
-        return usuario.takeIf { valido }?.copy(passwordSalt = "", passwordHash = "")
+        return usuario.takeIf { valido }
+            ?.toDomain()
+            ?.copy(passwordSalt = "", passwordHash = "")
     }
 
     override suspend fun registrarUsuario(usuario: Usuario) {
-        database.usuarioDao().insertar(usuario)
+        database.usuarioDao().insertar(usuario.toEntity())
     }
 
     override suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean =
@@ -108,57 +114,57 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             ) {
                 return@withTransaction false
             }
-            database.usuarioDao().insertar(usuario)
+            database.usuarioDao().insertar(usuario.toEntity())
             true
         }
 
     override suspend fun cargarSnapshot(): HuertoSnapshot = HuertoSnapshot(
-        sectores = database.sectorDao().obtenerTodos(),
-        cultivos = database.cultivoDao().obtenerTodos(),
-        tareas = database.tareaDao().obtenerTodos(),
-        evidencias = database.evidenciaDao().obtenerTodos(),
-        validaciones = database.validacionDao().obtenerTodos(),
-        reportesProblemas = database.reporteProblemaDao().obtenerTodos(),
-        actividades = database.actividadTareaDao().obtenerTodos()
+        sectores = database.sectorDao().obtenerTodos().map { it.toDomain() },
+        cultivos = database.cultivoDao().obtenerTodos().map { it.toDomain() },
+        tareas = database.tareaDao().obtenerTodos().map { it.toDomain() },
+        evidencias = database.evidenciaDao().obtenerTodos().map { it.toDomain() },
+        validaciones = database.validacionDao().obtenerTodos().map { it.toDomain() },
+        reportesProblemas = database.reporteProblemaDao().obtenerTodos().map { it.toDomain() },
+        actividades = database.actividadTareaDao().obtenerTodos().map { it.toDomain() }
     )
 
     override suspend fun guardarSector(sector: Sector) {
-        database.sectorDao().insertar(sector)
+        database.sectorDao().insertar(sector.toEntity())
     }
 
     override suspend fun actualizarSector(sector: Sector) {
-        database.sectorDao().actualizar(sector)
+        database.sectorDao().actualizar(sector.toEntity())
     }
 
     override suspend fun eliminarSector(sector: Sector) {
-        database.sectorDao().eliminar(sector)
+        database.sectorDao().eliminar(sector.toEntity())
     }
 
     override suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector) {
         database.withTransaction {
-            database.sectorDao().asegurar(sector)
-            database.cultivoDao().insertar(cultivo)
+            database.sectorDao().asegurar(sector.toEntity())
+            database.cultivoDao().insertar(cultivo.toEntity())
         }
     }
 
     override suspend fun actualizarCultivo(cultivo: Cultivo) {
-        database.cultivoDao().actualizar(cultivo)
+        database.cultivoDao().actualizar(cultivo.toEntity())
     }
 
     override suspend fun eliminarCultivo(cultivo: Cultivo) {
-        database.cultivoDao().eliminar(cultivo)
+        database.cultivoDao().eliminar(cultivo.toEntity())
     }
 
     override suspend fun guardarEvidencia(evidencia: Evidencia) {
-        database.evidenciaDao().insertar(evidencia)
+        database.evidenciaDao().insertar(evidencia.toEntity())
     }
 
     override suspend fun guardarEvidenciaLocal(
         tareaId: String,
         comentario: String,
-        imagenUri: Uri
+        imagenUri: String
     ): Evidencia = copiarEvidenciaLocal(
-        imagenUri = imagenUri,
+        imagenUri = Uri.parse(imagenUri),
         descripcion = comentario,
         tareaId = tareaId
     )
@@ -166,17 +172,17 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     override suspend fun guardarEvidenciaAsociada(
         tipoAsociacion: TipoAsociacionEvidencia,
         entidadId: String,
-        imagenUri: Uri
+        imagenUri: String
     ): Evidencia {
         val evidencia = copiarEvidenciaLocal(
-            imagenUri = imagenUri,
+            imagenUri = Uri.parse(imagenUri),
             tareaId = if (tipoAsociacion == TipoAsociacionEvidencia.TAREA) entidadId else null,
             cultivoId = if (tipoAsociacion == TipoAsociacionEvidencia.CULTIVO) entidadId else null,
             reporteId = if (tipoAsociacion == TipoAsociacionEvidencia.REPORTE) entidadId else null
         )
         var guardada = false
         try {
-            database.evidenciaDao().insertar(evidencia)
+            database.evidenciaDao().insertar(evidencia.toEntity())
             guardada = true
             return evidencia
         } finally {
@@ -224,7 +230,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         if (archivo.exists() && !archivo.delete()) {
             throw IOException("No se pudo eliminar el archivo de evidencia.")
         }
-        database.evidenciaDao().eliminar(evidencia)
+        database.evidenciaDao().eliminar(evidencia.toEntity())
     }
 
     override fun eliminarArchivoEvidencia(rutaArchivo: String): Boolean = File(rutaArchivo).delete()
@@ -245,7 +251,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                 fechaRegistro = elemento.getString("fechaRegistro")
             )
             if (File(evidencia.rutaArchivo).isFile && evidencia.tareaId in tareas) {
-                database.evidenciaDao().insertar(evidencia)
+                database.evidenciaDao().insertar(evidencia.toEntity())
             }
         }
         preferences.edit().remove("evidencias").apply()
@@ -256,7 +262,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         val json = context.getSharedPreferences("historial_tareas", Context.MODE_PRIVATE)
             .getString("actividades", null) ?: return
         val elementos = JSONArray(json)
-        val usuarios = database.usuarioDao().obtenerTodos().associateBy { it.id }
+        val usuarios = database.usuarioDao().obtenerTodos().map { it.toDomain() }.associateBy { it.id }
         for (index in 0 until elementos.length()) {
             val item = elementos.getJSONObject(index)
             val actividad = ActividadTarea(
@@ -286,11 +292,11 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actividad: ActividadTarea
     ) {
         database.withTransaction {
-            database.sectorDao().asegurar(sector)
-            database.usuarioDao().asegurar(estudiante)
-            database.usuarioDao().asegurar(actor)
-            database.tareaDao().insertar(tarea)
-            database.actividadTareaDao().insertar(actividad)
+            database.sectorDao().asegurar(sector.toEntity())
+            database.usuarioDao().asegurar(estudiante.toEntity())
+            database.usuarioDao().asegurar(actor.toEntity())
+            database.tareaDao().insertar(tarea.toEntity())
+            database.actividadTareaDao().insertar(actividad.toEntity())
         }
     }
 
@@ -302,11 +308,11 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actividad: ActividadTarea
     ) {
         database.withTransaction {
-            database.usuarioDao().asegurar(actor)
-            database.usuarioDao().asegurar(estudiante)
-            database.sectorDao().asegurar(sector)
-            database.tareaDao().actualizar(tarea)
-            database.actividadTareaDao().insertar(actividad)
+            database.usuarioDao().asegurar(actor.toEntity())
+            database.usuarioDao().asegurar(estudiante.toEntity())
+            database.sectorDao().asegurar(sector.toEntity())
+            database.tareaDao().actualizar(tarea.toEntity())
+            database.actividadTareaDao().insertar(actividad.toEntity())
         }
     }
 
@@ -317,10 +323,10 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actividad: ActividadTarea
     ) {
         database.withTransaction {
-            database.usuarioDao().asegurar(estudiante)
-            database.tareaDao().actualizar(tarea)
-            database.evidenciaDao().insertar(evidencia)
-            database.actividadTareaDao().insertar(actividad)
+            database.usuarioDao().asegurar(estudiante.toEntity())
+            database.tareaDao().actualizar(tarea.toEntity())
+            database.evidenciaDao().insertar(evidencia.toEntity())
+            database.actividadTareaDao().insertar(actividad.toEntity())
         }
     }
 
@@ -331,26 +337,26 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         administrador: Usuario
     ) {
         database.withTransaction {
-            database.usuarioDao().asegurar(administrador)
+            database.usuarioDao().asegurar(administrador.toEntity())
             database.usuarioDao().asegurar(
                 database.usuarioDao().obtenerPorId(tarea.asignadoA)
                     ?: throw IllegalStateException("El responsable de la tarea ya no existe.")
             )
-            database.tareaDao().actualizar(tarea)
-            database.validacionDao().insertar(validacion)
-            database.actividadTareaDao().insertar(actividad)
+            database.tareaDao().actualizar(tarea.toEntity())
+            database.validacionDao().insertar(validacion.toEntity())
+            database.actividadTareaDao().insertar(actividad.toEntity())
         }
     }
 
     override suspend fun migrarActividad(actividad: ActividadTarea, actor: Usuario) {
         database.withTransaction {
             val tarea = database.tareaDao().obtenerPorId(actividad.tareaId) ?: return@withTransaction
-            database.usuarioDao().asegurar(actor)
+            database.usuarioDao().asegurar(actor.toEntity())
             database.usuarioDao().asegurar(
                 database.usuarioDao().obtenerPorId(tarea.asignadoA)
                     ?: throw IllegalStateException("El responsable de la actividad ya no existe.")
             )
-            database.actividadTareaDao().insertar(actividad)
+            database.actividadTareaDao().insertar(actividad.toEntity())
         }
     }
 
@@ -361,22 +367,22 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         usuario: Usuario
     ) {
         database.withTransaction {
-            database.sectorDao().asegurar(sector)
-            cultivo?.let { database.cultivoDao().asegurar(it) }
-            database.usuarioDao().asegurar(usuario)
-            database.reporteProblemaDao().insertar(reporte)
+            database.sectorDao().asegurar(sector.toEntity())
+            cultivo?.let { database.cultivoDao().asegurar(it.toEntity()) }
+            database.usuarioDao().asegurar(usuario.toEntity())
+            database.reporteProblemaDao().insertar(reporte.toEntity())
         }
     }
 
     override suspend fun obtenerReportesProblema(usuarioId: String?): List<ReporteProblema> =
         if (usuarioId == null) {
-            database.reporteProblemaDao().obtenerTodos()
+            database.reporteProblemaDao().obtenerTodos().map { it.toDomain() }
         } else {
-            database.reporteProblemaDao().obtenerPorUsuario(usuarioId)
+            database.reporteProblemaDao().obtenerPorUsuario(usuarioId).map { it.toDomain() }
         }
 
     override suspend fun actualizarReporte(reporte: ReporteProblema) {
-        database.reporteProblemaDao().actualizar(reporte)
+        database.reporteProblemaDao().actualizar(reporte.toEntity())
     }
 
     private companion object {

@@ -5,8 +5,8 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Base64
-import com.example.huertolindo.data.model.Usuario
-import com.example.huertolindo.data.security.PasswordHasher
+import com.example.huertolindo.domain.model.Usuario
+import com.example.huertolindo.domain.security.PasswordHasher
 import java.util.Locale
 
 class LegacyUsuarioImporter(context: Context) :

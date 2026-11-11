@@ -1,9 +1,9 @@
 package com.example.huertolindo
 
-import com.example.huertolindo.data.model.Tarea
-import com.example.huertolindo.data.model.TipoTarea
-import com.example.huertolindo.data.security.PermisosHuerto
-import com.example.huertolindo.data.security.ReglasHuerto
+import com.example.huertolindo.domain.model.Tarea
+import com.example.huertolindo.domain.model.TipoTarea
+import com.example.huertolindo.domain.security.PermisosHuerto
+import com.example.huertolindo.domain.security.ReglasHuerto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

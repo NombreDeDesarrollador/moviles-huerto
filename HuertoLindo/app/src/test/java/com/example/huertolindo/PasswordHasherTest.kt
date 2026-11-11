@@ -1,6 +1,6 @@
 package com.example.huertolindo
 
-import com.example.huertolindo.data.security.PasswordHasher
+import com.example.huertolindo.domain.security.PasswordHasher
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
