@@ -5,5 +5,5 @@ data class SensorSimulado(
     val humedadSuelo: Double,
     val temperaturaAmbiental: Double,
     val humedadAmbiental: Double,
-    val origen: String = "Simulación académica"
+    val origen: String = "Simulación académica / Dato de prueba"
 )

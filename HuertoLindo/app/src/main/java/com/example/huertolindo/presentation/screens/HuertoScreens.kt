@@ -2,6 +2,8 @@ package com.example.huertolindo.presentation.screens
 
 import android.net.Uri
 import android.content.ActivityNotFoundException
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -23,6 +26,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -72,7 +76,9 @@ fun SectoresScreen(
                 sectorEnEdicion = null
                 mostrarFormulario = true
             }) { Text("Agregar sector") }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            AnimatedVisibility(visible = error != null) {
+                Text(error ?: "", color = MaterialTheme.colorScheme.error)
+            }
         }
         if (uiState.sectores.isEmpty()) {
             Text("Todavía no hay sectores registrados.")
@@ -80,7 +86,7 @@ fun SectoresScreen(
         uiState.sectores.forEach { sector ->
             ElevatedCard(
                 onClick = { onSectorClick(sector.id) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().animateContentSize()
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
@@ -160,14 +166,16 @@ fun DetalleSectorScreen(
                 cultivoEnEdicion = null
                 mostrarFormulario = true
             }) { Text("Agregar cultivo") }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            AnimatedVisibility(visible = error != null) {
+                Text(error ?: "", color = MaterialTheme.colorScheme.error)
+            }
         }
         val cultivos = uiState.cultivos.filter { it.sectorId == sector.id }
         if (cultivos.isEmpty()) Text("Este sector todavía no tiene cultivos.")
         cultivos.forEach { cultivo ->
             ElevatedCard(
                 onClick = { onCultivoClick(cultivo.id) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().animateContentSize()
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
@@ -317,10 +325,12 @@ fun TareasScreen(
                 mostrarFormulario = true
             }) { Text("Crear y asignar tarea") }
             uiState.errorCargaUsuarios?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            AnimatedVisibility(visible = error != null) {
+                Text(error ?: "", color = MaterialTheme.colorScheme.error)
+            }
         }
-        if (viewModel.tareasAtrasadas.isNotEmpty()) {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        AnimatedVisibility(visible = viewModel.tareasAtrasadas.isNotEmpty()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth().animateContentSize()) {
                 Column(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -381,7 +391,7 @@ fun TareasScreen(
         tareasFiltradas.forEach { tarea ->
             ElevatedCard(
                 onClick = { onTaskClick(tarea.id) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().animateContentSize()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -764,21 +774,58 @@ fun DetalleTareaScreen(
 fun SensoresScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
     ScreenLayout("Sensores del huerto", onBack) {
-        Text("Lecturas de demostración; no corresponden a sensores físicos.")
-        Text("Las alertas son informativas: no activan bombas ni riego automático.")
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(
+                    text = "Aviso: Simulación académica / Dato de prueba",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = "Lecturas de demostración; no corresponden a sensores físicos ni activan riego automático.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
         uiState.sectores.forEach { sector ->
             val lectura = if (sector.id == "1") {
-                SensorSimulado(sector.id, 62.0, 21.5, 54.0)
+                SensorSimulado(sector.id, 62.0, 21.5, 54.0, "Simulación académica / Dato de prueba")
             } else {
-                SensorSimulado(sector.id, 48.0, 23.0, 49.0)
+                SensorSimulado(sector.id, 48.0, 23.0, 49.0, "Simulación académica / Dato de prueba")
             }
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Text(
+                                text = "Simulación académica / Dato de prueba",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Text("Humedad del suelo: ${lectura.humedadSuelo}%")
                     Text("Temperatura ambiental: ${lectura.temperaturaAmbiental} °C")
                     Text("Humedad ambiental: ${lectura.humedadAmbiental}%")
-                    Text(lectura.origen, style = MaterialTheme.typography.bodySmall)
+                    Text("Origen: ${lectura.origen}", style = MaterialTheme.typography.bodySmall)
                     if (lectura.humedadSuelo < 50.0) {
                         HuertoStatusChip("Bajo · pendiente de revisión")
                     }

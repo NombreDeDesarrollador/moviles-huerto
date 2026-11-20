@@ -33,11 +33,23 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.huertolindo.data.local.SessionManager
+import com.example.huertolindo.domain.usecase.AuthUseCase
+import com.example.huertolindo.domain.usecase.GestionCultivosUseCase
+import com.example.huertolindo.domain.usecase.GestionReportesUseCase
+import com.example.huertolindo.domain.usecase.GestionSectoresUseCase
+import com.example.huertolindo.domain.usecase.GestionTareasUseCase
 
 class HuertoViewModel(
     application: Application,
     private val huertoRepository: HuertoRepository,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val sessionManager: SessionManager = SessionManager(application),
+    private val authUseCase: AuthUseCase = AuthUseCase(huertoRepository, sessionManager),
+    private val sectoresUseCase: GestionSectoresUseCase = GestionSectoresUseCase(huertoRepository),
+    private val cultivosUseCase: GestionCultivosUseCase = GestionCultivosUseCase(huertoRepository),
+    private val tareasUseCase: GestionTareasUseCase = GestionTareasUseCase(huertoRepository),
+    private val reportesUseCase: GestionReportesUseCase = GestionReportesUseCase(huertoRepository)
 ) : AndroidViewModel(application) {
 
     private val _usuarioActual = MutableStateFlow<Usuario?>(null)
@@ -213,6 +225,9 @@ class HuertoViewModel(
     )
 
     init {
+        authUseCase.obtenerSesionActiva()?.let {
+            _usuarioActual.value = it
+        }
         cargarDatosPersistentes()
     }
 
@@ -1127,10 +1142,13 @@ class HuertoViewModel(
         onResult: (ResultadoInicioSesion) -> Unit
     ) {
         viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
             val resultado = try {
-                withContext(ioDispatcher) {
-                    huertoRepository.autenticar(correo, password)
-                }?.let { ResultadoInicioSesion.Exito(it) } ?: ResultadoInicioSesion.CredencialesInvalidas
+                val usuario = withContext(ioDispatcher) {
+                    authUseCase.autenticar(correo, password)
+                }
+                usuario?.let { ResultadoInicioSesion.Exito(it) } ?: ResultadoInicioSesion.CredencialesInvalidas
             } catch (exception: SQLiteException) {
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
@@ -1138,10 +1156,15 @@ class HuertoViewModel(
             } catch (exception: IllegalArgumentException) {
                 android.util.Log.e("HuertoViewModel", "Las credenciales guardadas no tienen un formato válido.", exception)
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
+            } finally {
+                _isLoading.value = false
             }
 
             if (resultado is ResultadoInicioSesion.Exito) {
                 _usuarioActual.value = resultado.usuario
+                _successMessage.value = "Sesión iniciada correctamente"
+            } else if (resultado is ResultadoInicioSesion.CredencialesInvalidas) {
+                _errorMessage.value = "Credenciales inválidas"
             }
             onResult(resultado)
         }
@@ -1156,23 +1179,10 @@ class HuertoViewModel(
         onResult: (ResultadoRegistro) -> Unit
     ) {
         viewModelScope.launch {
+            _isLoading.value = true
             val resultado = try {
                 withContext(ioDispatcher) {
-                    val salt = PasswordHasher.createSalt()
-                    huertoRepository.registrarUsuario(
-                        Usuario(
-                            id = java.util.UUID.randomUUID().toString(),
-                            nombre = nombre.trim(),
-                            correo = correo.trim().lowercase(Locale.ROOT),
-                            perfil = "estudiante",
-                            tallerAsignado = tallerAsignado.trim(),
-                            apellido = apellido.trim(),
-                            passwordSalt = PasswordHasher.encodeBase64(salt),
-                            passwordHash = PasswordHasher.encodeBase64(
-                                PasswordHasher.hash(password, salt)
-                            )
-                        )
-                    )
+                    authUseCase.registrarUsuario(nombre, apellido, correo, password, tallerAsignado)
                 }
                 ResultadoRegistro.Exito
             } catch (exception: SQLiteConstraintException) {
@@ -1181,6 +1191,8 @@ class HuertoViewModel(
                 ResultadoRegistro.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
                 ResultadoRegistro.ErrorDeBaseDeDatos
+            } finally {
+                _isLoading.value = false
             }
             onResult(resultado)
         }
@@ -1202,26 +1214,15 @@ class HuertoViewModel(
                 return@launch
             }
 
+            _isLoading.value = true
             val resultado = try {
-                withContext(ioDispatcher) {
-                    val salt = PasswordHasher.createSalt()
-                    val usuario = Usuario(
-                        id = java.util.UUID.randomUUID().toString(),
-                        nombre = nombre.trim(),
-                        correo = correo.trim().lowercase(Locale.ROOT),
-                        perfil = PermisosHuerto.ADMINISTRADOR,
-                        tallerAsignado = "General",
-                        apellido = apellido.trim(),
-                        passwordSalt = PasswordHasher.encodeBase64(salt),
-                        passwordHash = PasswordHasher.encodeBase64(
-                            PasswordHasher.hash(password, salt)
-                        )
-                    )
-                    if (huertoRepository.registrarAdministrador(usuario, administradorId)) {
-                        ResultadoRegistroAdministrador.Exito
-                    } else {
-                        ResultadoRegistroAdministrador.NoAutorizado
-                    }
+                val ok = withContext(ioDispatcher) {
+                    authUseCase.registrarAdministrador(nombre, apellido, correo, password, administradorId)
+                }
+                if (ok) {
+                    ResultadoRegistroAdministrador.Exito
+                } else {
+                    ResultadoRegistroAdministrador.NoAutorizado
                 }
             } catch (exception: SQLiteConstraintException) {
                 ResultadoRegistroAdministrador.CorreoYaRegistrado
@@ -1229,6 +1230,8 @@ class HuertoViewModel(
                 ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
                 ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
+            } finally {
+                _isLoading.value = false
             }
             onResult(resultado)
         }
@@ -1239,10 +1242,13 @@ class HuertoViewModel(
     }
 
     fun cerrarSesion() {
+        authUseCase.cerrarSesion()
         _usuarioActual.value = null
         _fotoPerfilUri.value = null
         _usuariosDisponibles.value = emptyList()
         _errorCargaUsuarios.value = null
+        _errorMessage.value = null
+        _successMessage.value = null
     }
 
     sealed interface ResultadoInicioSesion {

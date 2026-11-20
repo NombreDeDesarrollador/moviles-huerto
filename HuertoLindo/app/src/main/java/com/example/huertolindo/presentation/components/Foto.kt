@@ -1,17 +1,30 @@
 package com.example.huertolindo.presentation.components
 
 import android.net.Uri
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.*
-import androidx.compose.foundation.layout.*
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.TakePicture
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.*
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -28,14 +41,15 @@ fun FotoScreen(
     onVolver: () -> Unit,
     onCerrarSesion: () -> Unit
 ) {
+    val context = LocalContext.current
+    var uriPendiente by rememberSaveable { mutableStateOf<Uri?>(null) }
+
     val selectorFotos = rememberLauncherForActivityResult(
         contract = PickVisualMedia()
     ) { uri ->
         if (uri != null) onFotoPerfilChange(uri)
     }
 
-    val context = LocalContext.current
-    var uriPendiente by rememberSaveable() { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = TakePicture()
     ) { fotoTomada ->
@@ -68,7 +82,7 @@ fun FotoScreen(
             model = fotoPerfil,
             contentDescription = "Foto de perfil de $nombreUsuario",
             modifier = Modifier
-                .size(180.dp)
+                .size(160.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop
         )
@@ -89,14 +103,8 @@ fun FotoScreen(
                     val nuevaUri = crearUriFotografia(context)
                     uriPendiente = nuevaUri
                     cameraLauncher.launch(nuevaUri)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     uriPendiente = null
-                    Log.e("FotoScreen", "No se pudo iniciar la captura de foto", e)
-                    Toast.makeText(
-                        context,
-                        "No se pudo abrir la cámara.",
-                        Toast.LENGTH_SHORT
-                    ).show()
                 }
             }
         ) {
@@ -109,7 +117,12 @@ fun FotoScreen(
             }
         }
 
-        Button(onClick = onCerrarSesion) {
+        Button(
+            onClick = onCerrarSesion,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error
+            )
+        ) {
             Text("Cerrar sesión")
         }
     }

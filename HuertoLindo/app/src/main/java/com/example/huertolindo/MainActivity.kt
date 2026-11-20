@@ -16,30 +16,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import com.example.huertolindo.presentation.components.FotoScreen
-import com.example.huertolindo.presentation.screens.AdminDashboardScreen
-import com.example.huertolindo.presentation.screens.RegistroAdministradorScreen
-import com.example.huertolindo.presentation.screens.EstudianteDashboardScreen
-import com.example.huertolindo.presentation.screens.DetalleCultivoScreen
-import com.example.huertolindo.presentation.screens.DetalleTareaScreen
-import com.example.huertolindo.presentation.screens.DetalleSectorScreen
-import com.example.huertolindo.presentation.screens.HistorialActividadesScreen
-import com.example.huertolindo.presentation.screens.CalendarioHuertoScreen
-import com.example.huertolindo.presentation.screens.GaleriaHuertoScreen
-import com.example.huertolindo.presentation.screens.LoginScreen
-import com.example.huertolindo.presentation.screens.ReportesProblemasScreen
-import com.example.huertolindo.presentation.screens.ReportesScreen
-import com.example.huertolindo.presentation.screens.RegistroScreen
-import com.example.huertolindo.presentation.screens.SectoresScreen
-import com.example.huertolindo.presentation.screens.SensoresScreen
-import com.example.huertolindo.presentation.screens.TareasScreen
-import com.example.huertolindo.presentation.theme.HuertoLindoTheme
 import com.example.huertolindo.domain.security.PermisosHuerto
+import com.example.huertolindo.presentation.screens.*
+import com.example.huertolindo.presentation.theme.HuertoLindoTheme
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
 
 class MainActivity : ComponentActivity() {
 
-    // Inicializamos el ViewModel
+    // Inicializamos el ViewModel con la fábrica personalizada
     private val huertoViewModel: HuertoViewModel by viewModels {
         HuertoViewModelFactory(application)
     }
@@ -60,162 +44,166 @@ class MainActivity : ComponentActivity() {
                     var cultivoSeleccionado by rememberSaveable { mutableStateOf("") }
                     var tareaSeleccionada by rememberSaveable { mutableStateOf("") }
 
+                    // Si hay una sesión activa persistida y estamos en login, dirigir automáticamente al menú
+                    LaunchedEffect(huertoState.usuarioActual) {
+                        if (huertoState.usuarioActual != null && pantallaActual == "login") {
+                            pantallaActual = "menu"
+                        }
+                    }
+
                     Crossfade(targetState = pantallaActual, label = "screen-navigation") { pantalla ->
-                    when {
-                        pantalla !in setOf("login", "registro") &&
-                            huertoState.usuarioActual == null -> {
-                            TextButton(onClick = { pantallaActual = "login" }) {
-                                Text("Sesión no iniciada · Volver al inicio")
-                            }
-                        }
-                        pantalla == "administradores" &&
-                            !PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil) -> {
-                            TextButton(onClick = { pantallaActual = "menu" }) {
-                                Text("Acceso no autorizado · Volver")
-                            }
-                        }
-                        pantalla == "reportes" &&
-                            huertoState.usuarioActual?.perfil != "administrador" -> {
-                            TextButton(onClick = { pantallaActual = "menu" }) {
-                                Text("Acceso no autorizado · Volver")
-                            }
-                        }
-                        else -> when (pantalla) {
-                        "login" -> {
-                            LoginScreen(
-                                viewModel = huertoViewModel,
-                                mensajeInformativo = mensajeRegistro,
-                                onRegisterClick = {
-                                    mensajeRegistro = null
-                                    pantallaActual = "registro"
-                                },
-                                onLoginSuccess = {
-                                    huertoViewModel.cargarReportesProblema()
-                                    huertoViewModel.cargarUsuariosDisponibles()
-                                    pantallaActual = "menu"
+                        when {
+                            pantalla !in setOf("login", "registro") &&
+                                huertoState.usuarioActual == null &&
+                                !huertoState.cargandoDatos -> {
+                                TextButton(onClick = { pantallaActual = "login" }) {
+                                    Text("Sesión no iniciada · Volver al inicio")
                                 }
-                            )
-                        }
-                        "registro" -> {
-                            RegistroScreen(
-                                viewModel = huertoViewModel,
-                                onBackToLogin = { pantallaActual = "login" },
-                                onRegistrationSuccess = {
-                                    mensajeRegistro = "Cuenta creada. Ahora puedes iniciar sesión."
-                                    pantallaActual = "login"
+                            }
+                            pantalla == "administradores" &&
+                                !PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil) -> {
+                                TextButton(onClick = { pantallaActual = "menu" }) {
+                                    Text("Acceso no autorizado · Volver")
                                 }
-                            )
-                        }
-                        "menu" -> {
-                            if (huertoState.usuarioActual?.perfil == "administrador") {
-                                AdminDashboardScreen(
+                            }
+                            pantalla == "reportes" &&
+                                !PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil) -> {
+                                TextButton(onClick = { pantallaActual = "menu" }) {
+                                    Text("Acceso no autorizado · Volver")
+                                }
+                            }
+                            else -> when (pantalla) {
+                                "login" -> {
+                                    LoginScreen(
+                                        viewModel = huertoViewModel,
+                                        mensajeInformativo = mensajeRegistro,
+                                        onRegisterClick = {
+                                            mensajeRegistro = null
+                                            pantallaActual = "registro"
+                                        },
+                                        onLoginSuccess = {
+                                            huertoViewModel.cargarReportesProblema()
+                                            huertoViewModel.cargarUsuariosDisponibles()
+                                            pantallaActual = "menu"
+                                        }
+                                    )
+                                }
+                                "registro" -> {
+                                    RegistroScreen(
+                                        viewModel = huertoViewModel,
+                                        onBackToLogin = { pantallaActual = "login" },
+                                        onRegistrationSuccess = {
+                                            mensajeRegistro = "Cuenta creada exitosamente. Ahora puedes iniciar sesión."
+                                            pantallaActual = "login"
+                                        }
+                                    )
+                                }
+                                "menu" -> {
+                                    if (PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil)) {
+                                        AdminDashboardScreen(
+                                            viewModel = huertoViewModel,
+                                            onProfileClick = { pantallaActual = "perfil" },
+                                            onSectorsClick = { pantallaActual = "sectores" },
+                                            onTasksClick = { pantallaActual = "tareas" },
+                                            onSensorsClick = { pantallaActual = "sensores" },
+                                            onReportsClick = { pantallaActual = "reportes" },
+                                            onProblemsClick = { pantallaActual = "problemas" },
+                                            onHistoryClick = { pantallaActual = "historial" },
+                                            onAdministratorsClick = { pantallaActual = "administradores" },
+                                            onCalendarClick = { pantallaActual = "calendario" },
+                                            onGalleryClick = { pantallaActual = "galeria" }
+                                        )
+                                    } else {
+                                        EstudianteDashboardScreen(
+                                            viewModel = huertoViewModel,
+                                            onProfileClick = { pantallaActual = "perfil" },
+                                            onSectorsClick = { pantallaActual = "sectores" },
+                                            onTasksClick = { pantallaActual = "tareas" },
+                                            onSensorsClick = { pantallaActual = "sensores" },
+                                            onProblemsClick = { pantallaActual = "problemas" },
+                                            onHistoryClick = { pantallaActual = "historial" },
+                                            onCalendarClick = { pantallaActual = "calendario" },
+                                            onGalleryClick = { pantallaActual = "galeria" }
+                                        )
+                                    }
+                                }
+                                "perfil" -> {
+                                    PerfilUsuarioScreen(
+                                        viewModel = huertoViewModel,
+                                        onVolver = { pantallaActual = "menu" },
+                                        onCerrarSesion = {
+                                            huertoViewModel.cerrarSesion()
+                                            mensajeRegistro = null
+                                            pantallaActual = "login"
+                                        }
+                                    )
+                                }
+                                "administradores" -> RegistroAdministradorScreen(
                                     viewModel = huertoViewModel,
-                                    onProfileClick = { pantallaActual = "perfil" },
-                                    onSectorsClick = { pantallaActual = "sectores" },
-                                    onTasksClick = { pantallaActual = "tareas" },
-                                    onSensorsClick = { pantallaActual = "sensores" },
-                                    onReportsClick = { pantallaActual = "reportes" },
-                                    onProblemsClick = { pantallaActual = "problemas" },
-                                    onHistoryClick = { pantallaActual = "historial" },
-                                    onAdministratorsClick = { pantallaActual = "administradores" },
-                                    onCalendarClick = { pantallaActual = "calendario" },
-                                    onGalleryClick = { pantallaActual = "galeria" }
+                                    onBack = { pantallaActual = "menu" },
+                                    onRegistrationSuccess = { pantallaActual = "menu" }
                                 )
-                            } else {
-                                EstudianteDashboardScreen(
+                                "sectores" -> SectoresScreen(
                                     viewModel = huertoViewModel,
-                                    onProfileClick = { pantallaActual = "perfil" },
-                                    onSectorsClick = { pantallaActual = "sectores" },
-                                    onTasksClick = { pantallaActual = "tareas" },
-                                    onSensorsClick = { pantallaActual = "sensores" },
-                                    onProblemsClick = { pantallaActual = "problemas" },
-                                    onHistoryClick = { pantallaActual = "historial" },
-                                    onCalendarClick = { pantallaActual = "calendario" },
-                                    onGalleryClick = { pantallaActual = "galeria" }
+                                    onBack = { pantallaActual = "menu" },
+                                    onSectorClick = {
+                                        sectorSeleccionado = it
+                                        pantallaActual = "detalleSector"
+                                    }
+                                )
+                                "detalleSector" -> DetalleSectorScreen(
+                                    viewModel = huertoViewModel,
+                                    sectorId = sectorSeleccionado,
+                                    onBack = { pantallaActual = "sectores" },
+                                    onCultivoClick = {
+                                        cultivoSeleccionado = it
+                                        pantallaActual = "detalleCultivo"
+                                    }
+                                )
+                                "detalleCultivo" -> DetalleCultivoScreen(
+                                    viewModel = huertoViewModel,
+                                    cultivoId = cultivoSeleccionado,
+                                    onBack = { pantallaActual = "detalleSector" }
+                                )
+                                "tareas" -> TareasScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" },
+                                    onTaskClick = {
+                                        tareaSeleccionada = it
+                                        pantallaActual = "detalleTarea"
+                                    }
+                                )
+                                "detalleTarea" -> DetalleTareaScreen(
+                                    viewModel = huertoViewModel,
+                                    tareaId = tareaSeleccionada,
+                                    onBack = { pantallaActual = "tareas" }
+                                )
+                                "sensores" -> SensoresScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                                "problemas" -> ReportesProblemasScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                                "historial" -> HistorialActividadesScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                                "calendario" -> CalendarioHuertoScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                                "galeria" -> GaleriaHuertoScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
+                                )
+                                "reportes" -> ReportesScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { pantallaActual = "menu" }
                                 )
                             }
                         }
-                        "perfil" -> {
-                            FotoScreen(
-                                nombreUsuario = huertoViewModel.usuarioActual?.nombreCompleto ?: "Usuario",
-                                fotoPerfil = huertoViewModel.fotoPerfilUri,
-                                onFotoPerfilChange = huertoViewModel::actualizarFotoPerfil,
-                                onVolver = { pantallaActual = "menu" },
-                                onCerrarSesion = {
-                                    huertoViewModel.cerrarSesion()
-                                    mensajeRegistro = null
-                                    pantallaActual = "login"
-                                }
-                            )
-                        }
-                        "administradores" -> RegistroAdministradorScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" },
-                            onRegistrationSuccess = { pantallaActual = "menu" }
-                        )
-                        "sectores" -> SectoresScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" },
-                            onSectorClick = {
-                                sectorSeleccionado = it
-                                pantallaActual = "detalleSector"
-                            }
-                        )
-                        "detalleSector" -> DetalleSectorScreen(
-                            viewModel = huertoViewModel,
-                            sectorId = sectorSeleccionado,
-                            onBack = { pantallaActual = "sectores" },
-                            onCultivoClick = {
-                                cultivoSeleccionado = it
-                                pantallaActual = "detalleCultivo"
-                            }
-                        )
-                        "detalleCultivo" -> DetalleCultivoScreen(
-                            viewModel = huertoViewModel,
-                            cultivoId = cultivoSeleccionado,
-                            onBack = { pantallaActual = "detalleSector" }
-                        )
-                        "tareas" -> TareasScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" },
-                            onTaskClick = {
-                                tareaSeleccionada = it
-                                pantallaActual = "detalleTarea"
-                            }
-                        )
-                        "detalleTarea" -> DetalleTareaScreen(
-                            viewModel = huertoViewModel,
-                            tareaId = tareaSeleccionada,
-                            onBack = { pantallaActual = "tareas" }
-                        )
-                        "sensores" -> SensoresScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
-                        "problemas" -> ReportesProblemasScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
-                        "historial" -> HistorialActividadesScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
-                        "calendario" -> CalendarioHuertoScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
-                        "galeria" -> GaleriaHuertoScreen(
-                            viewModel = huertoViewModel,
-                            onBack = { pantallaActual = "menu" }
-                        )
-                        "reportes" -> {
-                            ReportesScreen(
-                                viewModel = huertoViewModel,
-                                onBack = { pantallaActual = "menu" }
-                            )
-                        }
-                    }
-                    }
                     }
                 }
             }
