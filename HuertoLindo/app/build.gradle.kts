@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
+    id("jacoco")
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -83,4 +85,76 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.coil.compose)
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+// ─── Kover – Cobertura oficial de Kotlin ───────────────────────────────────
+// Filtra únicamente las capas de lógica de negocio (excluye Compose UI/Screens,
+// tema, Room-generated stubs y boilerplate de Android).
+kover {
+    reports {
+        filters {
+            includes {
+                classes(
+                    "com.example.huertolindo.domain.*",
+                    "com.example.huertolindo.presentation.validation.*",
+                    "com.example.huertolindo.presentation.viewmodel.*",
+                    "com.example.huertolindo.data.remote.*",
+                    "com.example.huertolindo.data.local.mapper.*"
+                )
+            }
+            excludes {
+                androidGeneratedClasses()
+                classes(
+                    "**/R.class",
+                    "**/R\$*.class",
+                    "**/BuildConfig.*",
+                    "**/Manifest*.*",
+                    "**/*Test*.*",
+                    "**/*ComposableSingletons*.*",
+                    "**/*_Factory*.*",
+                    "**/*_HiltComponents*.*"
+                )
+            }
+        }
+    }
+}
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco/jacocoTestReport/html"))
+    }
+
+    val fileFilter = listOf(
+        "**/R.class",
+        "**/R$*.class",
+        "**/BuildConfig.*",
+        "**/Manifest*.*",
+        "**/*Test*.*",
+        "android/**/*.*",
+        "**/*ComposableSingletons*.*",
+        "**/*_Factory*.*"
+    )
+
+    val debugTree = fileTree("${project.layout.buildDirectory.get()}/intermediates/javac/debug") {
+        exclude(fileFilter)
+    }
+    val kotlinDebugTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
+        exclude(fileFilter)
+    }
+
+    val mainSrc = "${project.projectDir}/src/main/java"
+
+    sourceDirectories.setFrom(files(mainSrc))
+    classDirectories.setFrom(files(debugTree, kotlinDebugTree))
+    executionData.setFrom(fileTree(project.layout.buildDirectory.get()) {
+        include("outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+    })
 }
