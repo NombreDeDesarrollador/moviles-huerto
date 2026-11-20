@@ -15,6 +15,7 @@ import com.example.huertolindo.domain.security.ReglasHuerto
 import com.example.huertolindo.domain.security.PasswordHasher
 import com.example.huertolindo.domain.security.EvidenciaNoSeguraException
 import com.example.huertolindo.presentation.state.HuertoUiState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +36,8 @@ import java.util.Locale
 
 class HuertoViewModel(
     application: Application,
-    private val huertoRepository: HuertoRepository
+    private val huertoRepository: HuertoRepository,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AndroidViewModel(application) {
 
     private val _usuarioActual = MutableStateFlow<Usuario?>(null)
@@ -132,6 +134,39 @@ class HuertoViewModel(
     val errorPersistenciaState = _errorPersistencia.asStateFlow()
     val errorPersistencia: String? get() = _errorPersistencia.value
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoadingState = _isLoading.asStateFlow()
+    val isLoading: Boolean get() = _isLoading.value || _cargandoDatos.value
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessageState = _errorMessage.asStateFlow()
+    val errorMessage: String? get() = _errorMessage.value ?: _errorPersistencia.value
+
+    private val _successMessage = MutableStateFlow<String?>(null)
+    val successMessageState = _successMessage.asStateFlow()
+    val successMessage: String? get() = _successMessage.value
+
+    fun limpiarError() {
+        _errorMessage.value = null
+        _errorPersistencia.value = null
+    }
+
+    fun limpiarExito() {
+        _successMessage.value = null
+    }
+
+    fun setError(mensaje: String?) {
+        _errorMessage.value = mensaje
+    }
+
+    fun setSuccess(mensaje: String?) {
+        _successMessage.value = mensaje
+    }
+
+    fun setLoading(cargando: Boolean) {
+        _isLoading.value = cargando
+    }
+
     val uiState: StateFlow<HuertoUiState> = merge(
         _usuarioActual.map { Unit },
         _fotoPerfilUri.map { Unit },
@@ -148,7 +183,10 @@ class HuertoViewModel(
         _usuariosDisponibles.map { Unit },
         _errorCargaUsuarios.map { Unit },
         _cargandoDatos.map { Unit },
-        _errorPersistencia.map { Unit }
+        _errorPersistencia.map { Unit },
+        _isLoading.map { Unit },
+        _errorMessage.map { Unit },
+        _successMessage.map { Unit }
     ).scan(crearUiState()) { _, _ -> crearUiState() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, crearUiState())
 
@@ -168,7 +206,10 @@ class HuertoViewModel(
         usuariosDisponibles = usuariosDisponibles.value,
         errorCargaUsuarios = errorCargaUsuarios,
         cargandoDatos = cargandoDatos,
-        errorPersistencia = errorPersistencia
+        errorPersistencia = errorPersistencia,
+        isLoading = isLoading,
+        errorMessage = errorMessage,
+        successMessage = successMessage
     )
 
     init {
@@ -178,20 +219,20 @@ class HuertoViewModel(
     private fun cargarDatosPersistentes() {
         viewModelScope.launch {
             try {
-                val snapshot = withContext(Dispatchers.IO) {
+                val snapshot = withContext(ioDispatcher) {
                     huertoRepository.inicializar()
                     huertoRepository.cargarSnapshot()
                 }
                 aplicarSnapshot(snapshot)
-                _usuariosDisponibles.value = withContext(Dispatchers.IO) {
+                _usuariosDisponibles.value = withContext(ioDispatcher) {
                     huertoRepository.obtenerUsuarios()
                 }
                 try {
-                    withContext(Dispatchers.IO) {
+                    withContext(ioDispatcher) {
                         huertoRepository.migrarEvidenciasLegacy(snapshot.evidencias)
                         huertoRepository.migrarHistorialLegacy(snapshot.actividades)
                     }
-                    aplicarSnapshot(withContext(Dispatchers.IO) { huertoRepository.cargarSnapshot() })
+                    aplicarSnapshot(withContext(ioDispatcher) { huertoRepository.cargarSnapshot() })
                 } catch (exception: SQLiteException) {
                     android.util.Log.e("HuertoViewModel", "No se pudieron migrar datos locales anteriores.", exception)
                     _errorPersistencia.value = "No se pudieron migrar algunos datos locales anteriores."
@@ -232,7 +273,7 @@ class HuertoViewModel(
     private fun refrescarSnapshot() {
         viewModelScope.launch {
             try {
-                aplicarSnapshot(withContext(Dispatchers.IO) { huertoRepository.cargarSnapshot() })
+                aplicarSnapshot(withContext(ioDispatcher) { huertoRepository.cargarSnapshot() })
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde Room.", exception)
                 _errorPersistencia.value = "No se pudieron actualizar los datos guardados."
@@ -267,7 +308,7 @@ class HuertoViewModel(
 
         viewModelScope.launch {
             val evidencia = try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.guardarEvidenciaLocal(
                         tareaId,
                         comentario.trim(),
@@ -294,7 +335,7 @@ class HuertoViewModel(
                 "Por validar"
             )
             try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.entregarTarea(
                         tareaEntregada,
                         evidencia,
@@ -304,7 +345,7 @@ class HuertoViewModel(
                 }
                 actualizarTarea(tareaEntregada)
             } catch (exception: SQLiteException) {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.eliminarArchivoEvidencia(evidencia.rutaArchivo)
                 }
                 _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidencia.id }
@@ -374,7 +415,7 @@ class HuertoViewModel(
 
         viewModelScope.launch {
             try {
-                val evidencia = withContext(Dispatchers.IO) {
+                val evidencia = withContext(ioDispatcher) {
                     huertoRepository.guardarEvidenciaAsociada(
                         tipoAsociacion,
                         entidadId,
@@ -428,7 +469,7 @@ class HuertoViewModel(
 
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.eliminarEvidencia(evidencia)
                 }
                 _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidenciaId }
@@ -556,7 +597,7 @@ class HuertoViewModel(
         }
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.validarTarea(actualizada, validacion, actividad, administrador)
                 }
                 _errorPersistencia.value = null
@@ -716,7 +757,7 @@ class HuertoViewModel(
         )
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.insertarReporte(reporte, sector, cultivo, usuario, fotografia)
                 }
                 cargarReportesProblema()
@@ -750,7 +791,7 @@ class HuertoViewModel(
         _cargandoReportesProblemas.value = true
         viewModelScope.launch {
             try {
-                val reportes = withContext(Dispatchers.IO) {
+                val reportes = withContext(ioDispatcher) {
                     huertoRepository.obtenerReportesProblema(
                         if (esAdministrador) null else usuario.id
                     )
@@ -803,7 +844,7 @@ class HuertoViewModel(
                         ""
                     }
                 )
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.actualizarReporte(actualizado)
                 }
                 cargarReportesProblema()
@@ -984,7 +1025,7 @@ class HuertoViewModel(
     fun cargarUsuariosDisponibles() {
         viewModelScope.launch {
             try {
-                val usuarios = withContext(Dispatchers.IO) { huertoRepository.obtenerUsuarios() }
+                val usuarios = withContext(ioDispatcher) { huertoRepository.obtenerUsuarios() }
                 _usuariosDisponibles.value = usuarios
                 _errorCargaUsuarios.value = null
             } catch (exception: SQLiteException) {
@@ -1054,17 +1095,28 @@ class HuertoViewModel(
 
     private fun persistir(operacion: suspend () -> Unit) {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                withContext(Dispatchers.IO) { operacion() }
+                withContext(ioDispatcher) { operacion() }
                 _errorPersistencia.value = null
+                _errorMessage.value = null
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo persistir un cambio del huerto.", exception)
                 _errorPersistencia.value = "No se pudo guardar el cambio en la base de datos."
+                _errorMessage.value = "No se pudo guardar el cambio en la base de datos."
                 refrescarSnapshot()
             } catch (exception: IllegalStateException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo completar la operación del huerto.", exception)
                 _errorPersistencia.value = exception.message ?: "No se pudo guardar el cambio."
+                _errorMessage.value = exception.message ?: "No se pudo guardar el cambio."
                 refrescarSnapshot()
+            } catch (exception: Exception) {
+                android.util.Log.e("HuertoViewModel", "Error al procesar la operación.", exception)
+                _errorPersistencia.value = exception.message ?: "Ocurrió un error inesperado."
+                _errorMessage.value = exception.message ?: "Ocurrió un error inesperado."
+                refrescarSnapshot()
+            } finally {
+                _isLoading.value = false
             }
         }
     }
@@ -1076,7 +1128,7 @@ class HuertoViewModel(
     ) {
         viewModelScope.launch {
             val resultado = try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     huertoRepository.autenticar(correo, password)
                 }?.let { ResultadoInicioSesion.Exito(it) } ?: ResultadoInicioSesion.CredencialesInvalidas
             } catch (exception: SQLiteException) {
@@ -1105,7 +1157,7 @@ class HuertoViewModel(
     ) {
         viewModelScope.launch {
             val resultado = try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     val salt = PasswordHasher.createSalt()
                     huertoRepository.registrarUsuario(
                         Usuario(
@@ -1115,10 +1167,9 @@ class HuertoViewModel(
                             perfil = "estudiante",
                             tallerAsignado = tallerAsignado.trim(),
                             apellido = apellido.trim(),
-                            passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
-                            passwordHash = Base64.encodeToString(
-                                PasswordHasher.hash(password, salt),
-                                Base64.NO_WRAP
+                            passwordSalt = PasswordHasher.encodeBase64(salt),
+                            passwordHash = PasswordHasher.encodeBase64(
+                                PasswordHasher.hash(password, salt)
                             )
                         )
                     )
@@ -1152,7 +1203,7 @@ class HuertoViewModel(
             }
 
             val resultado = try {
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     val salt = PasswordHasher.createSalt()
                     val usuario = Usuario(
                         id = java.util.UUID.randomUUID().toString(),
@@ -1161,10 +1212,9 @@ class HuertoViewModel(
                         perfil = PermisosHuerto.ADMINISTRADOR,
                         tallerAsignado = "General",
                         apellido = apellido.trim(),
-                        passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
-                        passwordHash = Base64.encodeToString(
-                            PasswordHasher.hash(password, salt),
-                            Base64.NO_WRAP
+                        passwordSalt = PasswordHasher.encodeBase64(salt),
+                        passwordHash = PasswordHasher.encodeBase64(
+                            PasswordHasher.hash(password, salt)
                         )
                     )
                     if (huertoRepository.registrarAdministrador(usuario, administradorId)) {

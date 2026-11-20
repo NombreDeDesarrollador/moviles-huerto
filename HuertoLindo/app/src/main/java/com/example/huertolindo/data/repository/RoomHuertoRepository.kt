@@ -10,8 +10,19 @@ import androidx.room.withTransaction
 import com.example.huertolindo.data.local.HuertoDatabase
 import com.example.huertolindo.data.local.HuertoDatabaseProvider
 import com.example.huertolindo.data.local.LegacyUsuarioImporter
+import com.example.huertolindo.data.local.entity.UsuarioEntity
 import com.example.huertolindo.data.local.mapper.toDomain
 import com.example.huertolindo.data.local.mapper.toEntity
+import com.example.huertolindo.data.remote.HuertoApiService
+import com.example.huertolindo.data.remote.LoginRequestDto
+import com.example.huertolindo.data.remote.toCultivoEstadoBackend
+import com.example.huertolindo.data.remote.toDomain
+import com.example.huertolindo.data.remote.toDto
+import com.example.huertolindo.data.remote.toTareaEstadoBackend
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.example.huertolindo.domain.model.ActividadTarea
 import com.example.huertolindo.domain.model.Cultivo
 import com.example.huertolindo.domain.model.Evidencia
@@ -35,7 +46,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-class RoomHuertoRepository(context: Context) : HuertoRepository {
+class RoomHuertoRepository(
+    context: Context,
+    private val apiService: HuertoApiService? = null
+) : HuertoRepository {
     private val context = context.applicationContext
     private val database: HuertoDatabase = HuertoDatabaseProvider.getDatabase(context)
     private val preferences = context.applicationContext.getSharedPreferences(
@@ -72,10 +86,9 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
                     correo = correo,
                     perfil = perfil,
                     tallerAsignado = "Demo",
-                    passwordSalt = Base64.encodeToString(salt, Base64.NO_WRAP),
-                    passwordHash = Base64.encodeToString(
-                        PasswordHasher.hash(password, salt),
-                        Base64.NO_WRAP
+                    passwordSalt = PasswordHasher.encodeBase64(salt),
+                    passwordHash = PasswordHasher.encodeBase64(
+                        PasswordHasher.hash(password, salt)
                     )
                 )
             }
@@ -94,7 +107,7 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             cuentasDemo.forEach { database.usuarioDao().asegurar(it.toEntity()) }
 
             if (!preferences.getBoolean(DEMO_DATA_INITIALIZED, false)) {
-                val snapshot = cargarSnapshot()
+                val snapshot = cargarSnapshotLocal()
                 if (snapshot.sectores.isEmpty() &&
                     snapshot.cultivos.isEmpty() &&
                     snapshot.tareas.isEmpty() &&
@@ -112,20 +125,49 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         preferences.edit().putBoolean(DEMO_DATA_INITIALIZED, true).apply()
     }
 
-    override suspend fun obtenerUsuarios(): List<Usuario> =
-        database.usuarioDao()
+    override suspend fun obtenerUsuarios(): List<Usuario> {
+        try {
+            if (apiService != null) {
+                val response = apiService.obtenerUsuarios()
+                if (response.isSuccessful && response.body() != null) {
+                    val remoteUsers = response.body()!!.map { it.toDomain() }
+                    database.withTransaction {
+                        remoteUsers.forEach { database.usuarioDao().asegurar(it.toEntity()) }
+                    }
+                    return remoteUsers
+                }
+            }
+        } catch (_: Exception) {
+            // Fallback to local Room
+        }
+        return database.usuarioDao()
             .obtenerTodos()
             .map { it.toDomain().copy(passwordSalt = "", passwordHash = "") }
+    }
 
     override suspend fun autenticar(correo: String, password: String): Usuario? {
+        val normalizado = correo.trim().lowercase(Locale.ROOT)
+        try {
+            if (apiService != null) {
+                val response = apiService.login(LoginRequestDto(normalizado, password))
+                if (response.isSuccessful && response.body() != null) {
+                    val usuarioRemoto = response.body()!!.toDomain()
+                    database.usuarioDao().asegurar(usuarioRemoto.toEntity())
+                    return usuarioRemoto.copy(passwordSalt = "", passwordHash = "")
+                }
+            }
+        } catch (_: Exception) {
+            // Fallback to local Room verification
+        }
+
         val usuario = database.usuarioDao()
-            .obtenerPorCorreo(correo.trim().lowercase(Locale.ROOT))
+            .obtenerPorCorreo(normalizado)
             ?: return null
         if (usuario.passwordSalt.isBlank() || usuario.passwordHash.isBlank()) return null
         val valido = PasswordHasher.verify(
             password,
-            Base64.decode(usuario.passwordSalt, Base64.NO_WRAP),
-            Base64.decode(usuario.passwordHash, Base64.NO_WRAP)
+            PasswordHasher.decodeBase64(usuario.passwordSalt),
+            PasswordHasher.decodeBase64(usuario.passwordHash)
         )
         return usuario.takeIf { valido }
             ?.toDomain()
@@ -133,6 +175,11 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     }
 
     override suspend fun registrarUsuario(usuario: Usuario) {
+        try {
+            apiService?.registrar(usuario.toDto())
+        } catch (_: Exception) {
+            // Offline / error handling
+        }
         database.usuarioDao().insertar(usuario.toEntity())
     }
 
@@ -144,11 +191,14 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             ) {
                 return@withTransaction false
             }
+            try {
+                apiService?.registrar(usuario.toDto())
+            } catch (_: Exception) {}
             database.usuarioDao().insertar(usuario.toEntity())
             true
         }
 
-    override suspend fun cargarSnapshot(): HuertoSnapshot = HuertoSnapshot(
+    private suspend fun cargarSnapshotLocal(): HuertoSnapshot = HuertoSnapshot(
         sectores = database.sectorDao().obtenerTodos().map { it.toDomain() },
         cultivos = database.cultivoDao().obtenerTodos().map { it.toDomain() },
         tareas = database.tareaDao().obtenerTodos().map { it.toDomain() },
@@ -158,19 +208,99 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actividades = database.actividadTareaDao().obtenerTodos().map { it.toDomain() }
     )
 
+    override suspend fun cargarSnapshot(): HuertoSnapshot {
+        try {
+            if (apiService != null) {
+                try {
+                    val userRes = apiService.obtenerUsuarios()
+                    if (userRes.isSuccessful && userRes.body() != null) {
+                        val remoteUsers = userRes.body()!!.map { it.toDomain() }
+                        database.withTransaction {
+                            remoteUsers.forEach { database.usuarioDao().asegurar(it.toEntity()) }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                val secRes = apiService.obtenerSectores()
+                val culRes = apiService.obtenerCultivos()
+                val tarRes = apiService.obtenerTareas()
+                val eviRes = apiService.obtenerEvidencias()
+                val valRes = apiService.obtenerValidaciones()
+                val repRes = apiService.obtenerReportes()
+
+                if (secRes.isSuccessful && culRes.isSuccessful && tarRes.isSuccessful) {
+                    val sectores = secRes.body()?.map { it.toDomain() } ?: emptyList()
+                    val cultivos = culRes.body()?.map { it.toDomain() } ?: emptyList()
+                    val tareas = tarRes.body()?.map { it.toDomain() } ?: emptyList()
+                    val evidencias = eviRes.body()?.map { it.toDomain() } ?: emptyList()
+                    val validaciones = valRes.body()?.map { it.toDomain() } ?: emptyList()
+                    val reportes = repRes.body()?.map { it.toDomain() } ?: emptyList()
+
+                    database.withTransaction {
+                        sectores.forEach { database.sectorDao().asegurar(it.toEntity()) }
+                        cultivos.forEach { database.cultivoDao().asegurar(it.toEntity()) }
+                        tareas.forEach { tarea ->
+                            if (tarea.asignadoA.isNotBlank() && database.usuarioDao().obtenerPorId(tarea.asignadoA) == null) {
+                                database.usuarioDao().asegurar(
+                                    UsuarioEntity(
+                                        id = tarea.asignadoA,
+                                        nombre = "Usuario",
+                                        correo = "${tarea.asignadoA}@huertolindo.cl",
+                                        perfil = "estudiante",
+                                        tallerAsignado = "Huerto"
+                                    )
+                                )
+                            }
+                            database.tareaDao().insertar(tarea.toEntity())
+                        }
+                        evidencias.forEach { database.evidenciaDao().insertar(it.toEntity()) }
+                        validaciones.forEach { database.validacionDao().insertar(it.toEntity()) }
+                        reportes.forEach { database.reporteProblemaDao().insertar(it.toEntity()) }
+                    }
+
+                    return HuertoSnapshot(
+                        sectores = sectores,
+                        cultivos = cultivos,
+                        tareas = tareas,
+                        evidencias = evidencias,
+                        validaciones = validaciones,
+                        reportesProblemas = reportes,
+                        actividades = database.actividadTareaDao().obtenerTodos().map { it.toDomain() }
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            // Fallback to local Room snapshot
+        }
+        return cargarSnapshotLocal()
+    }
+
     override suspend fun guardarSector(sector: Sector) {
+        try {
+            apiService?.guardarSector(sector.toDto())
+        } catch (_: Exception) {}
         database.sectorDao().insertar(sector.toEntity())
     }
 
     override suspend fun actualizarSector(sector: Sector) {
+        try {
+            apiService?.actualizarSector(sector.id, sector.toDto())
+        } catch (_: Exception) {}
         database.sectorDao().actualizar(sector.toEntity())
     }
 
     override suspend fun eliminarSector(sector: Sector) {
+        try {
+            apiService?.eliminarSector(sector.id)
+        } catch (_: Exception) {}
         database.sectorDao().eliminar(sector.toEntity())
     }
 
     override suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector) {
+        try {
+            apiService?.guardarSector(sector.toDto())
+            apiService?.guardarCultivo(cultivo.toDto())
+        } catch (_: Exception) {}
         database.withTransaction {
             database.sectorDao().asegurar(sector.toEntity())
             database.cultivoDao().insertar(cultivo.toEntity())
@@ -178,14 +308,24 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
     }
 
     override suspend fun actualizarCultivo(cultivo: Cultivo) {
+        try {
+            apiService?.actualizarCultivo(cultivo.id, cultivo.toDto())
+            apiService?.actualizarEstadoCultivo(cultivo.id, mapOf("estado" to cultivo.toCultivoEstadoBackend()))
+        } catch (_: Exception) {}
         database.cultivoDao().actualizar(cultivo.toEntity())
     }
 
     override suspend fun eliminarCultivo(cultivo: Cultivo) {
+        try {
+            apiService?.eliminarCultivo(cultivo.id)
+        } catch (_: Exception) {}
         database.cultivoDao().eliminar(cultivo.toEntity())
     }
 
     override suspend fun guardarEvidencia(evidencia: Evidencia) {
+        try {
+            // API upload if needed
+        } catch (_: Exception) {}
         database.evidenciaDao().insertar(evidencia.toEntity())
     }
 
@@ -210,6 +350,25 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             cultivoId = if (tipoAsociacion == TipoAsociacionEvidencia.CULTIVO) entidadId else null,
             reporteId = if (tipoAsociacion == TipoAsociacionEvidencia.REPORTE) entidadId else null
         )
+        try {
+            if (apiService != null) {
+                val archivo = File(evidencia.rutaArchivo)
+                if (archivo.exists()) {
+                    val reqFile = archivo.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                    val part = MultipartBody.Part.createFormData("file", archivo.name, reqFile)
+                    val tipoStr = when (tipoAsociacion) {
+                        TipoAsociacionEvidencia.TAREA -> "TAREA"
+                        TipoAsociacionEvidencia.CULTIVO -> "CULTIVO"
+                        TipoAsociacionEvidencia.REPORTE -> "REPORTE"
+                    }
+                    val tareaPart = if (tipoAsociacion == TipoAsociacionEvidencia.TAREA) entidadId.toRequestBody("text/plain".toMediaTypeOrNull()) else null
+                    val comPart = evidencia.descripcion.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val tipoPart = tipoStr.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val entPart = entidadId.toRequestBody("text/plain".toMediaTypeOrNull())
+                    apiService.subirEvidencia(part, tareaPart, comPart, tipoPart, entPart)
+                }
+            }
+        } catch (_: Exception) {}
         var guardada = false
         try {
             database.evidenciaDao().insertar(evidencia.toEntity())
@@ -371,6 +530,10 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actor: Usuario,
         actividad: ActividadTarea
     ) {
+        try {
+            apiService?.guardarSector(sector.toDto())
+            apiService?.guardarTarea(tarea.toDto())
+        } catch (_: Exception) {}
         database.withTransaction {
             database.sectorDao().asegurar(sector.toEntity())
             database.usuarioDao().asegurar(estudiante.toEntity())
@@ -387,6 +550,10 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actor: Usuario,
         actividad: ActividadTarea
     ) {
+        try {
+            apiService?.actualizarTarea(tarea.id, tarea.toDto())
+            apiService?.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
+        } catch (_: Exception) {}
         database.withTransaction {
             database.usuarioDao().asegurar(actor.toEntity())
             database.usuarioDao().asegurar(estudiante.toEntity())
@@ -402,6 +569,22 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         estudiante: Usuario,
         actividad: ActividadTarea
     ) {
+        try {
+            if (apiService != null) {
+                val archivo = File(evidencia.rutaArchivo)
+                if (archivo.exists()) {
+                    val reqFile = archivo.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                    val part = MultipartBody.Part.createFormData("file", archivo.name, reqFile)
+                    val tareaIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val comPart = evidencia.descripcion.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val tipoPart = "TAREA".toRequestBody("text/plain".toMediaTypeOrNull())
+                    val entidadIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
+                    apiService.subirEvidencia(part, tareaIdPart, comPart, tipoPart, entidadIdPart)
+                }
+                apiService.actualizarTarea(tarea.id, tarea.toDto())
+                apiService.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
+            }
+        } catch (_: Exception) {}
         database.withTransaction {
             database.usuarioDao().asegurar(estudiante.toEntity())
             database.tareaDao().actualizar(tarea.toEntity())
@@ -416,6 +599,11 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         actividad: ActividadTarea,
         administrador: Usuario
     ) {
+        try {
+            apiService?.actualizarTarea(tarea.id, tarea.toDto())
+            apiService?.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
+            apiService?.guardarValidacion(validacion.toDto())
+        } catch (_: Exception) {}
         database.withTransaction {
             database.usuarioDao().asegurar(administrador.toEntity())
             database.usuarioDao().asegurar(
@@ -453,6 +641,20 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
             reporteId = reporte.id
         )
         try {
+            if (apiService != null) {
+                apiService.guardarReporte(reporte.toDto())
+                val archivo = File(evidencia.rutaArchivo)
+                if (archivo.exists()) {
+                    val reqFile = archivo.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                    val part = MultipartBody.Part.createFormData("file", archivo.name, reqFile)
+                    val comPart = evidencia.descripcion.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val tipoPart = "REPORTE".toRequestBody("text/plain".toMediaTypeOrNull())
+                    val entidadIdPart = reporte.id.toRequestBody("text/plain".toMediaTypeOrNull())
+                    apiService.subirEvidencia(part, null, comPart, tipoPart, entidadIdPart)
+                }
+            }
+        } catch (_: Exception) {}
+        try {
             database.withTransaction {
                 database.sectorDao().asegurar(sector.toEntity())
                 cultivo?.let { database.cultivoDao().asegurar(it.toEntity()) }
@@ -466,14 +668,31 @@ class RoomHuertoRepository(context: Context) : HuertoRepository {
         }
     }
 
-    override suspend fun obtenerReportesProblema(usuarioId: String?): List<ReporteProblema> =
-        if (usuarioId == null) {
+    override suspend fun obtenerReportesProblema(usuarioId: String?): List<ReporteProblema> {
+        try {
+            if (apiService != null) {
+                val response = apiService.obtenerReportes()
+                if (response.isSuccessful && response.body() != null) {
+                    val reportes = response.body()!!.map { it.toDomain() }
+                    database.withTransaction {
+                        reportes.forEach { database.reporteProblemaDao().insertar(it.toEntity()) }
+                    }
+                    if (usuarioId == null) return reportes
+                    return reportes.filter { it.usuarioId == usuarioId }
+                }
+            }
+        } catch (_: Exception) {}
+        return if (usuarioId == null) {
             database.reporteProblemaDao().obtenerTodos().map { it.toDomain() }
         } else {
             database.reporteProblemaDao().obtenerPorUsuario(usuarioId).map { it.toDomain() }
         }
+    }
 
     override suspend fun actualizarReporte(reporte: ReporteProblema) {
+        try {
+            apiService?.actualizarReporte(reporte.id, reporte.toDto())
+        } catch (_: Exception) {}
         database.reporteProblemaDao().actualizar(reporte.toEntity())
     }
 

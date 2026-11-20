@@ -6,12 +6,17 @@ object PermisosHuerto {
     const val ADMINISTRADOR = "administrador"
     const val ESTUDIANTE = "estudiante"
 
-    fun esAdministrador(perfil: String?): Boolean = perfil == ADMINISTRADOR
+    fun esAdministrador(perfil: String?): Boolean =
+        perfil != null && (
+            perfil.equals(ADMINISTRADOR, ignoreCase = true) ||
+            perfil.equals("admin", ignoreCase = true) ||
+            perfil.equals("docente", ignoreCase = true)
+        )
 
     fun tareasVisibles(perfil: String?, usuarioId: String?, tareas: List<Tarea>): List<Tarea> =
         when {
             esAdministrador(perfil) -> tareas
-            perfil == ESTUDIANTE && usuarioId != null ->
+            (perfil?.equals(ESTUDIANTE, ignoreCase = true) == true) && usuarioId != null ->
                 tareas.filter { it.asignadoA == usuarioId }
             else -> emptyList()
         }

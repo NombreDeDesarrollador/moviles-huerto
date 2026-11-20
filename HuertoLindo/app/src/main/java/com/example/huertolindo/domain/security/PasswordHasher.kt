@@ -25,4 +25,16 @@ object PasswordHasher {
 
     fun verify(password: String, salt: ByteArray, expectedHash: ByteArray): Boolean =
         MessageDigest.isEqual(hash(password, salt), expectedHash)
+
+    fun encodeBase64(bytes: ByteArray): String = try {
+        java.util.Base64.getEncoder().encodeToString(bytes)
+    } catch (_: Throwable) {
+        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+    }
+
+    fun decodeBase64(str: String): ByteArray = try {
+        java.util.Base64.getDecoder().decode(str)
+    } catch (_: Throwable) {
+        android.util.Base64.decode(str, android.util.Base64.NO_WRAP)
+    }
 }

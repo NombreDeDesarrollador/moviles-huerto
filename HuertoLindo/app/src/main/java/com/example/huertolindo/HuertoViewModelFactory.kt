@@ -3,6 +3,7 @@ package com.example.huertolindo
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.huertolindo.data.remote.RetrofitClient
 import com.example.huertolindo.data.repository.RoomHuertoRepository
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
 
@@ -14,7 +15,7 @@ class HuertoViewModelFactory(
             throw IllegalArgumentException("ViewModel no soportado: ${modelClass.name}")
         }
         return modelClass.cast(
-            HuertoViewModel(application, RoomHuertoRepository(application))
+            HuertoViewModel(application, RoomHuertoRepository(application, RetrofitClient.api))
         ) ?: throw IllegalArgumentException("No se pudo crear ${modelClass.name}")
     }
 }

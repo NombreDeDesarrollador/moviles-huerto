@@ -24,7 +24,12 @@ object ValidacionRegistro {
         val correoNormalizado = correo.trim()
         val nombreValido = nombre.count { it.isLetter() } >= 2
         val apellidoValido = apellido.count { it.isLetter() } >= 2
-        val correoValido = Patterns.EMAIL_ADDRESS.matcher(correoNormalizado).matches()
+        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$".toRegex()
+        val correoValido = try {
+            Patterns.EMAIL_ADDRESS?.matcher(correoNormalizado)?.matches() ?: emailRegex.matches(correoNormalizado)
+        } catch (_: Throwable) {
+            emailRegex.matches(correoNormalizado)
+        }
         val passwordValido = password.isNotBlank()
         val confirmacionValida = confirmarPassword.isNotBlank() && confirmarPassword == password
 

@@ -110,8 +110,11 @@ interface TareaDao {
     @Query("SELECT * FROM tareas WHERE id = :tareaId")
     suspend fun obtenerPorId(tareaId: String): TareaEntity?
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(tarea: TareaEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun asegurar(tarea: TareaEntity)
 
     @Update
     suspend fun actualizar(tarea: TareaEntity)
