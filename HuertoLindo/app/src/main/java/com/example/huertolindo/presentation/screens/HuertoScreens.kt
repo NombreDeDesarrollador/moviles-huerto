@@ -208,11 +208,13 @@ fun DetalleSectorScreen(
     if (mostrarFormulario) {
         FormularioCultivo(
             cultivo = cultivoEnEdicion,
+            sectores = uiState.sectores.filter { it.id == sectorId },
+            sectorIdInicial = sectorId,
             onDismiss = {
                 mostrarFormulario = false
                 cultivoEnEdicionId = null
             },
-            onSave = { nombre, fechaSiembra, fechaCosecha, estado, frecuencia ->
+            onSave = { nombre, _, fechaSiembra, fechaCosecha, estado, frecuencia ->
                 val guardado = cultivoEnEdicion?.let {
                     viewModel.editarCultivo(
                         it.id,
@@ -237,6 +239,62 @@ fun DetalleSectorScreen(
                 } else {
                     error = "Completa los datos e ingresa fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra."
                 }
+                guardado
+            }
+        )
+    }
+}
+
+@Composable
+fun CultivosScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
+    val uiState = collectHuertoUiState(viewModel)
+    var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
+    ScreenLayout("Cultivos del huerto", onBack) {
+        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (uiState.sectores.isEmpty()) {
+            Text("Primero debes crear un sector para poder asociar cultivos.")
+        }
+        Button(
+            onClick = { mostrarFormulario = true },
+            enabled = uiState.sectores.isNotEmpty() && viewModel.esAdministrador
+        ) {
+            Text("Crear cultivo")
+        }
+        if (uiState.cultivos.isEmpty()) {
+            Text("Todavía no hay cultivos registrados.")
+        }
+        uiState.cultivos.forEach { cultivo ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Sector: ${
+                            uiState.sectores.firstOrNull { it.id == cultivo.sectorId }?.nombre
+                                ?: "No disponible"
+                        }"
+                    )
+                    Text("Estado: ${cultivo.estadoDesarrollo}")
+                    Text("Fecha de siembra: ${cultivo.fechaSiembra}")
+                }
+            }
+        }
+    }
+    if (mostrarFormulario) {
+        FormularioCultivo(
+            cultivo = null,
+            sectores = uiState.sectores,
+            sectorIdInicial = uiState.sectores.firstOrNull()?.id,
+            onDismiss = { mostrarFormulario = false },
+            onSave = { nombre, sectorId, fechaSiembra, fechaCosecha, estado, frecuencia ->
+                val guardado = viewModel.agregarCultivo(
+                    nombre,
+                    sectorId,
+                    fechaSiembra,
+                    fechaCosecha,
+                    estado,
+                    frecuencia
+                )
+                if (guardado) mostrarFormulario = false
                 guardado
             }
         )
@@ -293,6 +351,7 @@ fun DetalleCultivoScreen(viewModel: HuertoViewModel, cultivoId: String, onBack: 
 fun TareasScreen(
     viewModel: HuertoViewModel,
     onBack: () -> Unit,
+    onCreateCultivo: (String?) -> Unit,
     onTaskClick: (String) -> Unit
 ) {
     val uiState = collectHuertoUiState(viewModel)
@@ -436,6 +495,11 @@ fun TareasScreen(
             cultivos = uiState.cultivos,
             estudiantes = uiState.usuariosDisponibles.filter { it.perfil == "estudiante" },
             tarea = tareaEnEdicion,
+            onCreateCultivo = { sectorId ->
+                mostrarFormulario = false
+                tareaEnEdicionId = null
+                onCreateCultivo(sectorId)
+            },
             onDismiss = {
                 mostrarFormulario = false
                 tareaEnEdicionId = null
@@ -1524,11 +1588,16 @@ private fun FormularioSector(
 
 @Composable
 private fun FormularioCultivo(
-    cultivo: Cultivo? = null,
+    cultivo: Cultivo?,
+    sectores: List<Sector>,
+    sectorIdInicial: String?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String) -> Boolean
+    onSave: (String, String, String, String, String, String) -> Boolean
 ) {
     var nombre by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
+    var sectorId by rememberSaveable(cultivo?.id) {
+        mutableStateOf(cultivo?.sectorId ?: sectorIdInicial.orEmpty())
+    }
     var fechaSiembra by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
     var fechaCosechaEstimada by rememberSaveable(cultivo?.id) {
         mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
@@ -1543,6 +1612,16 @@ private fun FormularioCultivo(
         title = { Text(if (cultivo == null) "Agregar cultivo" else "Editar cultivo") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (sectores.size > 1) {
+                    CampoSeleccion(
+                        etiqueta = "Sector",
+                        opciones = sectores.map { it.id to it.nombre },
+                        seleccionado = sectorId,
+                        onSeleccionar = { sectorId = it }
+                    )
+                } else {
+                    Text("Sector: ${sectores.firstOrNull()?.nombre ?: "Sin sector"}")
+                }
                 OutlinedTextField(
                     value = nombre,
                     onValueChange = { nombre = it },
@@ -1566,16 +1645,20 @@ private fun FormularioCultivo(
                 )
                 CampoSeleccion(
                     etiqueta = "Estado de desarrollo",
-                    opciones = EstadoCultivo.opciones.filter {
-                        it in setOf(
-                            "Sembrado",
-                            "En crecimiento",
-                            "Desarrollo",
-                            "Listo para cosechar",
-                            "Cosechado",
-                            "Con problemas"
-                        )
-                    }.map { it to it },
+                    opciones = if (cultivo == null) {
+                        listOf("Sembrado").map { it to it }
+                    } else {
+                        EstadoCultivo.opciones.filter {
+                            it in setOf(
+                                "Sembrado",
+                                "En crecimiento",
+                                "Desarrollo",
+                                "Listo para cosechar",
+                                "Cosechado",
+                                "Con problemas"
+                            )
+                        }.map { it to it }
+                    },
                     seleccionado = estado,
                     onSeleccionar = { estado = it }
                 )
@@ -1588,7 +1671,7 @@ private fun FormularioCultivo(
                 )
                 if (mostrarError) {
                     Text(
-                        "Completa todos los campos con fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra.",
+                        "Completa todos los campos, elige un sector y usa fechas válidas; la cosecha debe ser igual o posterior a la siembra.",
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -1598,6 +1681,7 @@ private fun FormularioCultivo(
             TextButton(onClick = {
                 mostrarError = !onSave(
                     nombre,
+                    sectorId,
                     fechaSiembra,
                     fechaCosechaEstimada,
                     estado,
@@ -1615,6 +1699,7 @@ private fun FormularioTarea(
     cultivos: List<Cultivo>,
     estudiantes: List<Usuario>,
     tarea: Tarea? = null,
+    onCreateCultivo: (String?) -> Unit,
     onDismiss: () -> Unit,
     onSave: (String, String, String, String?, String, String, String) -> Boolean
 ) {
@@ -1663,13 +1748,24 @@ private fun FormularioTarea(
                         }
                     }
                 )
+                val cultivosDelSector = cultivos.filter { it.sectorId == sectorId }
                 CampoSeleccion(
                     etiqueta = "Cultivo",
-                    opciones = cultivos.filter { it.sectorId == sectorId }
-                        .map { it.id to it.nombreComun },
+                    opciones = cultivosDelSector.map { it.id to it.nombreComun },
                     seleccionado = cultivoId.orEmpty(),
                     onSeleccionar = { cultivoId = it }
                 )
+                if (sectorId.isNotBlank() && cultivosDelSector.isEmpty()) {
+                    Text("Este sector todavía no tiene cultivos.")
+                    TextButton(onClick = { onCreateCultivo(sectorId) }) {
+                        Text("Crear cultivo en este sector")
+                    }
+                } else if (sectorId.isBlank() && cultivos.isEmpty()) {
+                    Text("Primero selecciona un sector para poder crear un cultivo.")
+                    TextButton(onClick = { onCreateCultivo(null) }) {
+                        Text("Ir a Sectores")
+                    }
+                }
                 CampoSeleccion(
                     etiqueta = "Estudiante o grupo",
                     opciones = estudiantes.map { it.id to it.nombreCompleto } +

@@ -97,6 +97,12 @@ class MainActivity : ComponentActivity() {
                                     Text("Acceso no autorizado · Volver")
                                 }
                             }
+                            pantalla == "cultivos" &&
+                                !PermisosHuerto.esAdministrador(huertoState.usuarioActual?.perfil) -> {
+                                TextButton(onClick = { volverPantalla() }) {
+                                    Text("Acceso no autorizado · Volver")
+                                }
+                            }
                             else -> when (pantalla) {
                                 "login" -> {
                                     LoginScreen(
@@ -129,6 +135,7 @@ class MainActivity : ComponentActivity() {
                                             viewModel = huertoViewModel,
                                             onProfileClick = { navegarA("perfil") },
                                             onSectorsClick = { navegarA("sectores") },
+                                            onCultivosClick = { navegarA("cultivos") },
                                             onTasksClick = { navegarA("tareas") },
                                             onSensorsClick = { navegarA("sensores") },
                                             onReportsClick = { navegarA("reportes") },
@@ -176,6 +183,10 @@ class MainActivity : ComponentActivity() {
                                         navegarA("detalleSector")
                                     }
                                 )
+                                "cultivos" -> CultivosScreen(
+                                    viewModel = huertoViewModel,
+                                    onBack = { volverPantalla() }
+                                )
                                 "detalleSector" -> DetalleSectorScreen(
                                     viewModel = huertoViewModel,
                                     sectorId = sectorSeleccionado,
@@ -193,6 +204,14 @@ class MainActivity : ComponentActivity() {
                                 "tareas" -> TareasScreen(
                                     viewModel = huertoViewModel,
                                     onBack = { volverPantalla() },
+                                    onCreateCultivo = { sectorId ->
+                                        if (sectorId.isNullOrBlank()) {
+                                            navegarA("sectores")
+                                        } else {
+                                            sectorSeleccionado = sectorId
+                                            navegarA("detalleSector")
+                                        }
+                                    },
                                     onTaskClick = {
                                         tareaSeleccionada = it
                                         navegarA("detalleTarea")

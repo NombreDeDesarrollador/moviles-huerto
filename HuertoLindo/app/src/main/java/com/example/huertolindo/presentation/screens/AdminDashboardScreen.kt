@@ -32,6 +32,7 @@ fun AdminDashboardScreen(
     viewModel: HuertoViewModel,
     onProfileClick: () -> Unit,
     onSectorsClick: () -> Unit = {},
+    onCultivosClick: () -> Unit = {},
     onTasksClick: () -> Unit = {},
     onSensorsClick: () -> Unit = {},
     onReportsClick: () -> Unit = {},
@@ -301,6 +302,7 @@ fun AdminDashboardScreen(
         DashboardActionGrid(
             listOf(
                 DashboardActionItem("Sectores y Cultivos", "🌱", "Administrar zonas", null, null, null, onSectorsClick),
+                DashboardActionItem("Cultivos", "🪴", "Crear y consultar", null, null, null, onCultivosClick),
                 DashboardActionItem("Gestión de Tareas", "🧤", "Asignar y validar", tareasPorValidar.size.takeIf { it > 0 }, null, null, onTasksClick),
                 DashboardActionItem("Historial", "📋", "Auditoría de eventos", null, null, null, onHistoryClick),
                 DashboardActionItem("Sensores", "🌡️", "Simulación académica", null, null, null, onSensorsClick),

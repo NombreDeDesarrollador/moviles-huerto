@@ -322,8 +322,9 @@ class RoomHuertoRepository(
                 android.util.Log.w("RoomHuertoRepository", advertencia, exception)
                 null
             } catch (exception: IllegalStateException) {
-                advertencia = exception.message
-                    ?: "No se pudieron cargar las tareas del backend; los sectores y cultivos sí se sincronizaron."
+                val detalle = exception.message
+                    ?: "No se pudieron cargar las tareas del backend."
+                advertencia = "$detalle Cierra sesión y vuelve a iniciar sesión; si persiste, revisa el backend."
                 android.util.Log.e("RoomHuertoRepository", advertencia, exception)
                 null
             }

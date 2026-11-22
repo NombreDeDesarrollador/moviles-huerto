@@ -111,6 +111,8 @@ La app sincroniza sectores y cultivos, y permite crear y consultar tareas remota
 
 La sesión HTTP del backend se conserva entre reinicios en las preferencias privadas de la app y se elimina al cerrar sesión. Si falla la consulta de tareas, la app mantiene visibles los sectores y cultivos que sí pudo sincronizar y muestra una advertencia. Tras instalar esta actualización, cierra sesión e inicia sesión de nuevo una vez para crear la cookie persistente.
 
+El panel docente incluye una opción **Cultivos** para crear cultivos y elegir el sector asociado. También se pueden agregar desde **Sectores → elegir sector → Agregar cultivo**. Si intentas crear una tarea en un sector sin cultivos, el formulario ofrece un acceso directo.
+
 También puedes compilar desde la terminal, dentro de `HuertoLindo/`:
 
 ```bash
