@@ -79,11 +79,6 @@ fun PerfilUsuarioScreen(
                     TextButton(onClick = onVolver) {
                         Text("Volver")
                     }
-                },
-                actions = {
-                    TextButton(onClick = { mostrarConfirmarCierre = true }) {
-                        Text("Cerrar sesión", color = MaterialTheme.colorScheme.error)
-                    }
                 }
             )
         }
