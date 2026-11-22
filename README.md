@@ -43,7 +43,8 @@ Un administrador no puede validar una tarea que tiene asignada a sí mismo.
 |---|---|
 | Lenguaje | Kotlin 2.2.10 |
 | Interfaz | Jetpack Compose + Material 3 (Compose BOM 2026.02.01) |
-| Base de datos | Room 2.7.2 (con KAPT), esquema versión 6 |
+| Persistencia local | Room 2.7.2 (con KAPT), esquema versión 7 |
+| API y base de datos remota | Retrofit + API REST del proyecto MovilesBackend; el backend administra MySQL |
 | Imágenes | Coil 3.3.0 |
 | Arquitectura | MVVM: `ViewModel` + `StateFlow` + patrón Repository |
 | Build | Android Gradle Plugin 9.0.1, Gradle 9.2.1 |
@@ -72,7 +73,8 @@ HuertoLindo/app/src/main/java/com/example/huertolindo/
 
 - La navegación entre pantallas se maneja con estado en `MainActivity` y transiciones `Crossfade`.
 - Las reglas de permisos por rol están centralizadas en `PermisosHuerto` y las reglas de fechas en `ReglasHuerto`, lo que permite probarlas con tests unitarios.
-- La base de datos (`huerto_lindo_room.db`) incluye migraciones de la versión 1 a la 6.
+- La base de datos (`huerto_lindo_room.db`) incluye migraciones de la versión 1 a la 7.
+- Retrofit se conecta con el backend Spring Boot. Autenticación, registro y la lectura de sectores, cultivos y tareas usan DTOs del contrato remoto.
 
 ## Seguridad
 
@@ -98,6 +100,17 @@ HuertoLindo/app/src/main/java/com/example/huertolindo/
 2. Abre la carpeta `HuertoLindo/` en Android Studio y espera a que termine la sincronización de Gradle.
 3. Selecciona un emulador o dispositivo y presiona **Run ▶**.
 
+### Conectar con MovilesBackend
+
+1. Inicia MySQL y el backend, con la base de datos y credenciales configuradas en `MovilesBackend`.
+2. La URL de Android está configurada en `RetrofitClient.kt` como `http://10.0.2.2:8080/api/`. `10.0.2.2` permite que el emulador Android acceda al computador anfitrión.
+3. Para usar un teléfono físico, cambia `10.0.2.2` por la dirección IP local del computador y conecta ambos dispositivos a la misma red.
+4. El backend debe permanecer accesible desde el dispositivo. Android se comunica con la API; solo el backend se conecta directamente a MySQL.
+
+La app sincroniza sectores y cultivos, y permite crear y consultar tareas remotas. Como la API exige un cultivo y un usuario existentes para crear una tarea, ambos deben estar registrados en el backend. Para crear cultivos, el backend admite desde el estado **Sembrado**. El contrato remoto no almacena el estado de mantenimiento del sector, la frecuencia de riego ni la fecha estimada de cosecha; tampoco conserva los estados intermedios de las tareas y algunas categorías se convierten al tipo genérico del backend.
+
+La sesión HTTP del backend se conserva entre reinicios en las preferencias privadas de la app y se elimina al cerrar sesión. Si falla la consulta de tareas, la app mantiene visibles los sectores y cultivos que sí pudo sincronizar y muestra una advertencia. Tras instalar esta actualización, cierra sesión e inicia sesión de nuevo una vez para crear la cookie persistente.
+
 También puedes compilar desde la terminal, dentro de `HuertoLindo/`:
 
 ```bash
@@ -118,7 +131,7 @@ Las pruebas unitarias cubren los permisos por rol (`PermisosHuertoTest`), las re
 
 ## Notas
 
-- Los datos viven solo en el dispositivo: no hay servidor ni sincronización.
+- Room mantiene una copia local y los datos de las funciones aún no conectadas a la API. Las operaciones remotas de sectores, cultivos y creación de tareas muestran un error si el backend las rechaza o no está disponible, en vez de indicar que se guardaron correctamente.
 - Los sensores son simulados y no leen hardware real.
 - La app trae cuentas iniciales precargadas (un administrador y estudiantes). También se pueden crear usuarios desde la pantalla de registro.
 

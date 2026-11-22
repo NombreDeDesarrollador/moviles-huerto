@@ -58,8 +58,7 @@ class GestionCultivosUseCase(
             estadoDesarrollo = estadoDesarrollo,
             frecuenciaRiego = frecuenciaRiego.trim()
         )
-        repository.guardarCultivo(cultivo, sector)
-        return cultivo
+        return repository.guardarCultivo(cultivo, sector)
     }
 
     suspend fun editarCultivo(

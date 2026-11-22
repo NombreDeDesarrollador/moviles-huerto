@@ -35,6 +35,7 @@ class GestionTareasUseCase(
             titulo.isBlank() || descripcion.isBlank() ||
             !ReglasHuerto.esFechaIsoValida(fechaProgramada) ||
             !TipoTarea.esValido(tipo) ||
+            cultivoId.isNullOrBlank() ||
             estudiantes.isEmpty()
         ) return emptyList()
 
@@ -64,8 +65,7 @@ class GestionTareasUseCase(
                 estado = "Pendiente",
                 fecha = fechaHora
             )
-            repository.crearTarea(tarea, sector, estudiante, actor, actividad)
-            resultado.add(tarea to actividad)
+            resultado.add(repository.crearTarea(tarea, sector, estudiante, actor, actividad))
         }
         return resultado
     }
@@ -88,7 +88,7 @@ class GestionTareasUseCase(
             ReglasHuerto.esFechaIsoValida(fechaProgramada) &&
             TipoTarea.esValido(tipo) &&
             estudiante.perfil.equals(PermisosHuerto.ESTUDIANTE, ignoreCase = true) &&
-            (cultivo == null || cultivo.sectorId == sector.id)
+            cultivo?.sectorId == sector.id
 
     suspend fun editarTarea(
         tarea: Tarea,

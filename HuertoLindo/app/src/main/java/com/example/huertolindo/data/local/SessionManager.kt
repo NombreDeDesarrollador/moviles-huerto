@@ -2,6 +2,7 @@ package com.example.huertolindo.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.huertolindo.data.remote.RetrofitClient
 import com.example.huertolindo.domain.model.Usuario
 
 class SessionManager(context: Context) {
@@ -56,6 +57,7 @@ class SessionManager(context: Context) {
         try {
             preferences?.edit()?.clear()?.apply()
         } catch (_: Throwable) {}
+        RetrofitClient.clearSessionCookies()
     }
 
     fun haySesionActiva(): Boolean = try {

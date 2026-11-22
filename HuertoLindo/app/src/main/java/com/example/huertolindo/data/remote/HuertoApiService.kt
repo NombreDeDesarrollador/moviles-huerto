@@ -8,10 +8,16 @@ import retrofit2.http.*
 interface HuertoApiService {
 
     @POST("auth/login")
-    suspend fun login(@Body request: LoginRequestDto): Response<UsuarioDto>
+    suspend fun login(@Body request: LoginRequestDto): Response<BackendAuthResponseDto>
+
+    @POST("auth/registro")
+    suspend fun registrarEnBackend(@Body request: BackendRegistroRequestDto): Response<BackendUsuarioDto>
 
     @POST("auth/registro")
     suspend fun registrar(@Body usuario: UsuarioDto): Response<UsuarioDto>
+
+    @GET("usuarios")
+    suspend fun obtenerUsuariosBackend(): Response<List<BackendUsuarioDto>>
 
     @GET("usuarios")
     suspend fun obtenerUsuarios(): Response<List<UsuarioDto>>
@@ -29,14 +35,26 @@ interface HuertoApiService {
     @GET("sectores")
     suspend fun obtenerSectores(): Response<List<SectorDto>>
 
+    @GET("sectores")
+    suspend fun obtenerSectoresBackend(): Response<List<BackendSectorDto>>
+
     @GET("sectores/{id}")
     suspend fun obtenerSectorPorId(@Path("id") id: String): Response<SectorDto>
 
     @POST("sectores")
     suspend fun guardarSector(@Body sector: SectorDto): Response<SectorDto>
 
+    @POST("sectores")
+    suspend fun guardarSectorBackend(@Body sector: BackendSectorRequestDto): Response<BackendSectorDto>
+
     @PUT("sectores/{id}")
     suspend fun actualizarSector(@Path("id") id: String, @Body sector: SectorDto): Response<SectorDto>
+
+    @PUT("sectores/{id}")
+    suspend fun actualizarSectorBackend(
+        @Path("id") id: String,
+        @Body sector: BackendSectorRequestDto
+    ): Response<BackendSectorDto>
 
     @DELETE("sectores/{id}")
     suspend fun eliminarSector(@Path("id") id: String): Response<Void>
@@ -45,14 +63,28 @@ interface HuertoApiService {
     @GET("cultivos")
     suspend fun obtenerCultivos(): Response<List<CultivoDto>>
 
+    @GET("cultivos")
+    suspend fun obtenerCultivosBackend(): Response<List<BackendCultivoDto>>
+
     @GET("cultivos/{id}")
     suspend fun obtenerCultivoPorId(@Path("id") id: String): Response<CultivoDto>
 
     @POST("cultivos")
     suspend fun guardarCultivo(@Body cultivo: CultivoDto): Response<CultivoDto>
 
+    @POST("cultivos")
+    suspend fun guardarCultivoBackend(
+        @Body cultivo: BackendCultivoRequestDto
+    ): Response<BackendCultivoDto>
+
     @PUT("cultivos/{id}")
     suspend fun actualizarCultivo(@Path("id") id: String, @Body cultivo: CultivoDto): Response<CultivoDto>
+
+    @PUT("cultivos/{id}")
+    suspend fun actualizarCultivoBackend(
+        @Path("id") id: String,
+        @Body cultivo: BackendCultivoRequestDto
+    ): Response<BackendCultivoDto>
 
     @DELETE("cultivos/{id}")
     suspend fun eliminarCultivo(@Path("id") id: String): Response<Void>
@@ -64,14 +96,28 @@ interface HuertoApiService {
     @GET("tareas")
     suspend fun obtenerTareas(): Response<List<TareaDto>>
 
+    @GET("tareas")
+    suspend fun obtenerTareasBackend(): Response<List<BackendTareaDto>>
+
     @GET("tareas/{id}")
     suspend fun obtenerTareaPorId(@Path("id") id: String): Response<TareaDto>
 
     @POST("tareas")
     suspend fun guardarTarea(@Body tarea: TareaDto): Response<TareaDto>
 
+    @POST("tareas")
+    suspend fun guardarTareaBackend(
+        @Body tarea: BackendTareaRequestDto
+    ): Response<BackendTareaDto>
+
     @PUT("tareas/{id}")
     suspend fun actualizarTarea(@Path("id") id: String, @Body tarea: TareaDto): Response<TareaDto>
+
+    @PUT("tareas/{id}")
+    suspend fun actualizarTareaBackend(
+        @Path("id") id: String,
+        @Body tarea: BackendTareaRequestDto
+    ): Response<BackendTareaDto>
 
     @DELETE("tareas/{id}")
     suspend fun eliminarTarea(@Path("id") id: String): Response<Void>

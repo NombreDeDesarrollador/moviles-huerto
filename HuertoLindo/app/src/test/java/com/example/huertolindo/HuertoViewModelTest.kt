@@ -98,7 +98,7 @@ class HuertoViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         coEvery { repository.inicializar() } returns Unit
-        coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
+        val snapshot = HuertoSnapshot(
             sectores = listOf(demoSector),
             cultivos = listOf(demoCultivo),
             tareas = listOf(demoTarea, demoTareaPorValidar),
@@ -107,6 +107,8 @@ class HuertoViewModelTest {
             reportesProblemas = listOf(demoReporte),
             actividades = emptyList()
         )
+        coEvery { repository.cargarSnapshot() } returns snapshot
+        coEvery { repository.cargarSnapshot(any()) } returns snapshot
         coEvery { repository.obtenerUsuarios() } returns listOf(demoAdmin, demoEstudiante)
         coEvery { repository.migrarEvidenciasLegacy(any()) } returns Unit
         coEvery { repository.migrarHistorialLegacy(any()) } returns Unit
@@ -134,6 +136,27 @@ class HuertoViewModelTest {
         assertEquals(2, viewModel.uiState.value.tareas.size)
         assertEquals(1, viewModel.uiState.value.reportesProblemas.size)
         assertFalse(viewModel.uiState.value.cargandoDatos)
+    }
+
+    @Test
+    fun advertenciaDeTareasNoOcultaSectoresYCultivosCargados() = runTest {
+        val advertencia = "El backend rechazó tareas (HTTP 500)."
+        coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
+            sectores = listOf(demoSector),
+            cultivos = listOf(demoCultivo),
+            tareas = emptyList(),
+            evidencias = emptyList(),
+            validaciones = emptyList(),
+            reportesProblemas = emptyList(),
+            actividades = emptyList(),
+            advertencia = advertencia
+        )
+
+        val viewModel = crearViewModel()
+
+        assertEquals(listOf(demoSector), viewModel.listaSectores.value)
+        assertEquals(listOf(demoCultivo), viewModel.listaCultivos.value)
+        assertEquals(advertencia, viewModel.errorPersistencia)
     }
 
     @Test
@@ -186,7 +209,7 @@ class HuertoViewModelTest {
 
     @Test
     fun registrarUsuarioInvocaRepositorio() = runTest {
-        coEvery { repository.registrarUsuario(any()) } returns Unit
+        coEvery { repository.registrarUsuario(any(), any()) } returns Unit
         val viewModel = crearViewModel()
 
         var exito = false
@@ -201,13 +224,13 @@ class HuertoViewModelTest {
         advanceUntilIdle()
 
         assertTrue(exito)
-        coVerify(exactly = 1) { repository.registrarUsuario(any()) }
+        coVerify(exactly = 1) { repository.registrarUsuario(any(), any()) }
     }
 
     @Test
     fun administradoresPuedenCrearSectores() = runTest {
         coEvery { repository.autenticar(any(), any()) } returns demoAdmin
-        coEvery { repository.guardarSector(any()) } returns Unit
+        coEvery { repository.guardarSector(any()) } answers { firstArg() }
 
         val viewModel = crearViewModel()
         viewModel.iniciarSesion("admin@huertolindo.cl", "pass") {}
@@ -227,9 +250,30 @@ class HuertoViewModelTest {
     }
 
     @Test
+    fun falloAlGuardarSectorEnBackendRevierteElOptimismoYExponeElError() = runTest {
+        coEvery { repository.autenticar(any(), any()) } returns demoAdmin
+        coEvery { repository.guardarSector(any()) } throws IllegalStateException("Backend HTTP 403")
+
+        val viewModel = crearViewModel()
+        viewModel.iniciarSesion("admin@huertolindo.cl", "pass") {}
+        advanceUntilIdle()
+
+        viewModel.agregarSector(
+            nombre = "No persistido",
+            ubicacion = "Patio",
+            descripcion = "Prueba",
+            estado = "Disponible"
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.listaSectores.value.none { it.nombre == "No persistido" })
+        assertEquals("Backend HTTP 403", viewModel.errorPersistencia)
+    }
+
+    @Test
     fun administradoresPuedenEditarYEliminarSectores() = runTest {
         coEvery { repository.autenticar(any(), any()) } returns demoAdmin
-        coEvery { repository.guardarSector(any()) } returns Unit
+        coEvery { repository.guardarSector(any()) } answers { firstArg() }
         coEvery { repository.actualizarSector(any()) } returns Unit
         coEvery { repository.eliminarSector(any()) } returns Unit
 
@@ -260,7 +304,7 @@ class HuertoViewModelTest {
     @Test
     fun administradoresPuedenGestionarCultivos() = runTest {
         coEvery { repository.autenticar(any(), any()) } returns demoAdmin
-        coEvery { repository.guardarCultivo(any(), any()) } returns Unit
+        coEvery { repository.guardarCultivo(any(), any()) } answers { firstArg() }
         coEvery { repository.actualizarCultivo(any()) } returns Unit
 
         val viewModel = crearViewModel()
@@ -294,7 +338,9 @@ class HuertoViewModelTest {
     @Test
     fun administradoresPuedenCrearYEditarTareas() = runTest {
         coEvery { repository.autenticar(any(), any()) } returns demoAdmin
-        coEvery { repository.crearTarea(any(), any(), any(), any(), any()) } returns Unit
+        coEvery { repository.crearTarea(any(), any(), any(), any(), any()) } answers {
+            firstArg<Tarea>() to arg<ActividadTarea>(4)
+        }
         coEvery { repository.actualizarTarea(any(), any(), any(), any(), any()) } returns Unit
 
         val viewModel = crearViewModel()
@@ -321,10 +367,30 @@ class HuertoViewModelTest {
             sectorId = "sec-1",
             usuarioId = "estudiante-1",
             fechaProgramada = "2026-10-22",
-            tipo = TipoTarea.MANTENIMIENTO
+            tipo = TipoTarea.MANTENIMIENTO,
+            cultivoId = "cul-1"
         )
         advanceUntilIdle()
         assertTrue(editada)
+    }
+
+    @Test
+    fun noPermiteCrearTareaSinCultivoAsociado() = runTest {
+        coEvery { repository.autenticar(any(), any()) } returns demoAdmin
+        val viewModel = crearViewModel()
+        viewModel.iniciarSesion("admin@huertolindo.cl", "pass") {}
+        advanceUntilIdle()
+
+        val creada = viewModel.crearTarea(
+            titulo = "Tarea sin cultivo",
+            descripcion = "No debe guardarse",
+            sectorId = "sec-1",
+            usuarioId = "estudiante-1",
+            fechaProgramada = "2026-10-20",
+            tipo = TipoTarea.MANTENIMIENTO
+        )
+
+        assertFalse(creada)
     }
 
     @Test

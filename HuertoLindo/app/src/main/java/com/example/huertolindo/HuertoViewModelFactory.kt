@@ -16,6 +16,7 @@ class HuertoViewModelFactory(
 ) : ViewModelProvider.Factory {
 
     private val repository by lazy {
+        RetrofitClient.initialize(application)
         RoomHuertoRepository(application, RetrofitClient.api)
     }
 

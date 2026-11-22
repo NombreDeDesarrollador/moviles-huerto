@@ -15,10 +15,22 @@ import com.example.huertolindo.data.local.mapper.toDomain
 import com.example.huertolindo.data.local.mapper.toEntity
 import com.example.huertolindo.data.remote.HuertoApiService
 import com.example.huertolindo.data.remote.LoginRequestDto
+import com.example.huertolindo.data.remote.BackendRegistroRequestDto
+import com.example.huertolindo.data.remote.BackendCultivoDto
+import com.example.huertolindo.data.remote.BackendSectorDto
+import com.example.huertolindo.data.remote.BackendTareaDto
+import com.example.huertolindo.data.remote.toDomain as backendCultivoToDomain
+import com.example.huertolindo.data.remote.toDomain as backendSectorToDomain
+import com.example.huertolindo.data.remote.toDomain as backendUsuarioToDomain
+import com.example.huertolindo.data.remote.toDomain as backendTareaToDomain
+import com.example.huertolindo.data.remote.toBackendRequest as sectorToBackendRequest
+import com.example.huertolindo.data.remote.toBackendRequest as cultivoToBackendRequest
+import com.example.huertolindo.data.remote.toBackendRequest as tareaToBackendRequest
 import com.example.huertolindo.data.remote.toCultivoEstadoBackend
 import com.example.huertolindo.data.remote.toDomain
 import com.example.huertolindo.data.remote.toDto
 import com.example.huertolindo.data.remote.toTareaEstadoBackend
+import retrofit2.Response
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -64,6 +76,19 @@ class RoomHuertoRepository(
             importer.eliminarContrasenasEnClaro()
         } finally {
             importer.close()
+        }
+    }
+
+    private fun <T> Response<T>.requireBody(endpoint: String): T {
+        if (!isSuccessful) {
+            throw IllegalStateException("El backend rechazó $endpoint (HTTP ${code()}).")
+        }
+        return body() ?: throw IllegalStateException("El backend no devolvió datos al $endpoint.")
+    }
+
+    private fun Response<*>.requireSuccessful(endpoint: String) {
+        if (!isSuccessful) {
+            throw IllegalStateException("El backend rechazó $endpoint (HTTP ${code()}).")
         }
     }
 
@@ -126,19 +151,34 @@ class RoomHuertoRepository(
     }
 
     override suspend fun obtenerUsuarios(): List<Usuario> {
-        try {
-            if (apiService != null) {
-                val response = apiService.obtenerUsuarios()
-                if (response.isSuccessful && response.body() != null) {
-                    val remoteUsers = response.body()!!.map { it.toDomain() }
-                    database.withTransaction {
-                        remoteUsers.forEach { database.usuarioDao().asegurar(it.toEntity()) }
-                    }
-                    return remoteUsers
+        if (apiService != null) {
+            val response = try {
+                apiService.obtenerUsuariosBackend()
+            } catch (exception: IOException) {
+                android.util.Log.w(
+                    "RoomHuertoRepository",
+                    "El backend no está disponible; se cargarán los usuarios de Room.",
+                    exception
+                )
+                return database.usuarioDao().obtenerTodos().map {
+                    it.toDomain().copy(passwordSalt = "", passwordHash = "")
                 }
             }
-        } catch (_: Exception) {
-            // Fallback to local Room
+            if (response.code() == 401 || response.code() == 403) {
+                android.util.Log.i(
+                    "RoomHuertoRepository",
+                    "La sesión no permite listar usuarios; se cargarán los usuarios locales."
+                )
+                return database.usuarioDao().obtenerTodos().map {
+                    it.toDomain().copy(passwordSalt = "", passwordHash = "")
+                }
+            }
+            val remoteUsers = response.requireBody("usuarios")
+                .map { it.backendUsuarioToDomain() }
+            database.withTransaction {
+                remoteUsers.forEach { database.usuarioDao().asegurar(it.toEntity()) }
+            }
+            return remoteUsers
         }
         return database.usuarioDao()
             .obtenerTodos()
@@ -151,13 +191,20 @@ class RoomHuertoRepository(
             if (apiService != null) {
                 val response = apiService.login(LoginRequestDto(normalizado, password))
                 if (response.isSuccessful && response.body() != null) {
-                    val usuarioRemoto = response.body()!!.toDomain()
+                    val respuesta = response.body()!!
+                    if (!respuesta.usuario.activo) return null
+                    val usuarioRemoto = respuesta.usuario.backendUsuarioToDomain()
                     database.usuarioDao().asegurar(usuarioRemoto.toEntity())
                     return usuarioRemoto.copy(passwordSalt = "", passwordHash = "")
                 }
+                if (response.code() in 400..499) return null
+                android.util.Log.w(
+                    "RoomHuertoRepository",
+                    "El backend no pudo autenticar la cuenta (${response.code()}); se probará Room."
+                )
             }
-        } catch (_: Exception) {
-            // Fallback to local Room verification
+        } catch (exception: Exception) {
+            android.util.Log.w("RoomHuertoRepository", "No se pudo autenticar en el backend; se probará Room.", exception)
         }
 
         val usuario = database.usuarioDao()
@@ -175,12 +222,43 @@ class RoomHuertoRepository(
     }
 
     override suspend fun registrarUsuario(usuario: Usuario) {
-        try {
-            apiService?.registrar(usuario.toDto())
-        } catch (_: Exception) {
-            // Offline / error handling
-        }
         database.usuarioDao().insertar(usuario.toEntity())
+    }
+
+    override suspend fun registrarUsuario(usuario: Usuario, password: String) {
+        if (apiService != null) {
+            try {
+                val response = apiService.registrarEnBackend(
+                    BackendRegistroRequestDto(
+                        nombre = usuario.nombreCompleto,
+                        correo = usuario.correo,
+                        password = password
+                    )
+                )
+                if (response.isSuccessful) {
+                    val remoteUser = response.body()?.backendUsuarioToDomain()
+                        ?: throw IllegalStateException("El backend no devolvió el usuario registrado.")
+                    database.usuarioDao().insertar(
+                        remoteUser.copy(
+                            tallerAsignado = usuario.tallerAsignado,
+                            passwordSalt = usuario.passwordSalt,
+                            passwordHash = usuario.passwordHash
+                        ).toEntity()
+                    )
+                    return
+                }
+                if (response.code() in 400..499) {
+                    throw IllegalStateException("El backend rechazó el registro (${response.code()}).")
+                }
+                android.util.Log.w(
+                    "RoomHuertoRepository",
+                    "El backend no pudo registrar la cuenta (${response.code()}); se guardará en Room."
+                )
+            } catch (exception: java.io.IOException) {
+                android.util.Log.w("RoomHuertoRepository", "Backend no disponible; se guardará el registro en Room.", exception)
+            }
+        }
+        registrarUsuario(usuario)
     }
 
     override suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean =
@@ -208,117 +286,161 @@ class RoomHuertoRepository(
         actividades = database.actividadTareaDao().obtenerTodos().map { it.toDomain() }
     )
 
-    override suspend fun cargarSnapshot(): HuertoSnapshot {
+    override suspend fun cargarSnapshot(): HuertoSnapshot = cargarSnapshotRemoto(null)
+
+    override suspend fun cargarSnapshot(usuarioActual: Usuario): HuertoSnapshot =
+        cargarSnapshotRemoto(usuarioActual)
+
+    private suspend fun cargarSnapshotRemoto(usuarioActual: Usuario?): HuertoSnapshot {
+        if (apiService == null) return cargarSnapshotLocal()
+
+        val sectoresDto: List<BackendSectorDto>
+        val cultivosDto: List<BackendCultivoDto>
         try {
-            if (apiService != null) {
-                try {
-                    val userRes = apiService.obtenerUsuarios()
-                    if (userRes.isSuccessful && userRes.body() != null) {
-                        val remoteUsers = userRes.body()!!.map { it.toDomain() }
-                        database.withTransaction {
-                            remoteUsers.forEach { database.usuarioDao().asegurar(it.toEntity()) }
-                        }
-                    }
-                } catch (_: Exception) {}
+            sectoresDto = apiService.obtenerSectoresBackend().requireBody("sectores")
+            cultivosDto = apiService.obtenerCultivosBackend().requireBody("cultivos")
+        } catch (exception: IOException) {
+            android.util.Log.w(
+                "RoomHuertoRepository",
+                "El backend no está disponible; se cargará el snapshot local de Room.",
+                exception
+            )
+            return cargarSnapshotLocal()
+        }
 
-                val secRes = apiService.obtenerSectores()
-                val culRes = apiService.obtenerCultivos()
-                val tarRes = apiService.obtenerTareas()
-                val eviRes = apiService.obtenerEvidencias()
-                val valRes = apiService.obtenerValidaciones()
-                val repRes = apiService.obtenerReportes()
+        val sectores = sectoresDto.map { it.backendSectorToDomain() }
+        val cultivos = cultivosDto.map { it.backendCultivoToDomain() }
+        val cultivosPorId = cultivos.associateBy { it.id }
+        var advertencia: String? = null
+        val tareasDto = if (usuarioActual == null) {
+            null
+        } else {
+            try {
+                apiService.obtenerTareasBackend().requireBody("tareas")
+            } catch (exception: IOException) {
+                advertencia = "No se pudieron cargar las tareas del backend; los sectores y cultivos sí se sincronizaron."
+                android.util.Log.w("RoomHuertoRepository", advertencia, exception)
+                null
+            } catch (exception: IllegalStateException) {
+                advertencia = exception.message
+                    ?: "No se pudieron cargar las tareas del backend; los sectores y cultivos sí se sincronizaron."
+                android.util.Log.e("RoomHuertoRepository", advertencia, exception)
+                null
+            }
+        }
+        val tareasRemotas = tareasDto?.map { tareaDto ->
+            val cultivo = cultivosPorId[tareaDto.cultivoId.toString()]
+                ?: throw IllegalStateException(
+                    "La tarea ${tareaDto.id} referencia un cultivo que no devolvió la API."
+                )
+            tareaDto.backendTareaToDomain(cultivo)
+        } ?: emptyList()
 
-                if (secRes.isSuccessful && culRes.isSuccessful && tarRes.isSuccessful) {
-                    val sectores = secRes.body()?.map { it.toDomain() } ?: emptyList()
-                    val cultivos = culRes.body()?.map { it.toDomain() } ?: emptyList()
-                    val tareas = tarRes.body()?.map { it.toDomain() } ?: emptyList()
-                    val evidencias = eviRes.body()?.map { it.toDomain() } ?: emptyList()
-                    val validaciones = valRes.body()?.map { it.toDomain() } ?: emptyList()
-                    val reportes = repRes.body()?.map { it.toDomain() } ?: emptyList()
-
-                    database.withTransaction {
-                        sectores.forEach { database.sectorDao().asegurar(it.toEntity()) }
-                        cultivos.forEach { database.cultivoDao().asegurar(it.toEntity()) }
-                        tareas.forEach { tarea ->
-                            if (tarea.asignadoA.isNotBlank() && database.usuarioDao().obtenerPorId(tarea.asignadoA) == null) {
-                                database.usuarioDao().asegurar(
-                                    UsuarioEntity(
-                                        id = tarea.asignadoA,
-                                        nombre = "Usuario",
-                                        correo = "${tarea.asignadoA}@huertolindo.cl",
-                                        perfil = "estudiante",
-                                        tallerAsignado = "Huerto"
-                                    )
-                                )
-                            }
-                            database.tareaDao().insertar(tarea.toEntity())
-                        }
-                        evidencias.forEach { database.evidenciaDao().insertar(it.toEntity()) }
-                        validaciones.forEach { database.validacionDao().insertar(it.toEntity()) }
-                        reportes.forEach { database.reporteProblemaDao().insertar(it.toEntity()) }
-                    }
-
-                    return HuertoSnapshot(
-                        sectores = sectores,
-                        cultivos = cultivos,
-                        tareas = tareas,
-                        evidencias = evidencias,
-                        validaciones = validaciones,
-                        reportesProblemas = reportes,
-                        actividades = database.actividadTareaDao().obtenerTodos().map { it.toDomain() }
+        database.withTransaction {
+            sectores.forEach { database.sectorDao().insertar(it.toEntity()) }
+            cultivos.forEach { database.cultivoDao().insertar(it.toEntity()) }
+            tareasDto.orEmpty().zip(tareasRemotas).forEach { (tareaDto, tarea) ->
+                if (database.usuarioDao().obtenerPorId(tarea.asignadoA) == null) {
+                    database.usuarioDao().asegurar(
+                        UsuarioEntity(
+                            id = tarea.asignadoA,
+                            nombre = tareaDto.responsableNombre,
+                            correo = "${tarea.asignadoA}@backend.huertolindo",
+                            perfil = PermisosHuerto.ESTUDIANTE,
+                            tallerAsignado = "General"
+                        )
                     )
                 }
+                database.tareaDao().insertar(tarea.toEntity())
             }
-        } catch (_: Exception) {
-            // Fallback to local Room snapshot
         }
-        return cargarSnapshotLocal()
+
+        val localSnapshot = cargarSnapshotLocal()
+        return localSnapshot.copy(
+            sectores = sectores,
+            cultivos = cultivos,
+            tareas = tareasDto?.let { tareasRemotas } ?: localSnapshot.tareas,
+            advertencia = advertencia
+        )
     }
 
-    override suspend fun guardarSector(sector: Sector) {
-        try {
-            apiService?.guardarSector(sector.toDto())
-        } catch (_: Exception) {}
-        database.sectorDao().insertar(sector.toEntity())
+    override suspend fun guardarSector(sector: Sector): Sector {
+        val guardado = if (apiService != null) {
+            apiService.guardarSectorBackend(sector.sectorToBackendRequest())
+                .requireBody("crear sector")
+                .backendSectorToDomain()
+                .copy(
+                    estado = sector.estado,
+                    fechaInicioMantenimiento = sector.fechaInicioMantenimiento,
+                    fechaTerminoMantenimiento = sector.fechaTerminoMantenimiento
+                )
+        } else {
+            sector
+        }
+        database.sectorDao().insertar(guardado.toEntity())
+        return guardado
     }
 
     override suspend fun actualizarSector(sector: Sector) {
-        try {
-            apiService?.actualizarSector(sector.id, sector.toDto())
-        } catch (_: Exception) {}
-        database.sectorDao().actualizar(sector.toEntity())
+        val actualizado = if (apiService != null) {
+            apiService.actualizarSectorBackend(sector.id, sector.sectorToBackendRequest())
+                .requireBody("actualizar sector")
+                .backendSectorToDomain()
+                .copy(
+                    estado = sector.estado,
+                    fechaInicioMantenimiento = sector.fechaInicioMantenimiento,
+                    fechaTerminoMantenimiento = sector.fechaTerminoMantenimiento
+                )
+        } else {
+            sector
+        }
+        database.sectorDao().actualizar(actualizado.toEntity())
     }
 
     override suspend fun eliminarSector(sector: Sector) {
-        try {
-            apiService?.eliminarSector(sector.id)
-        } catch (_: Exception) {}
+        apiService?.eliminarSector(sector.id)?.requireSuccessful("eliminar sector")
         database.sectorDao().eliminar(sector.toEntity())
     }
 
-    override suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector) {
-        try {
-            apiService?.guardarSector(sector.toDto())
-            apiService?.guardarCultivo(cultivo.toDto())
-        } catch (_: Exception) {}
+    override suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector): Cultivo {
+        val guardado = if (apiService != null) {
+            val response = apiService.guardarCultivoBackend(cultivo.cultivoToBackendRequest())
+                .requireBody("crear cultivo")
+                .backendCultivoToDomain()
+            response.copy(
+                fechaCosechaEstimada = cultivo.fechaCosechaEstimada,
+                frecuenciaRiego = cultivo.frecuenciaRiego,
+                fechaCambioEstado = cultivo.fechaCambioEstado
+            )
+        } else {
+            cultivo
+        }
         database.withTransaction {
             database.sectorDao().asegurar(sector.toEntity())
-            database.cultivoDao().insertar(cultivo.toEntity())
+            database.cultivoDao().insertar(guardado.toEntity())
         }
+        return guardado
     }
 
     override suspend fun actualizarCultivo(cultivo: Cultivo) {
-        try {
-            apiService?.actualizarCultivo(cultivo.id, cultivo.toDto())
-            apiService?.actualizarEstadoCultivo(cultivo.id, mapOf("estado" to cultivo.toCultivoEstadoBackend()))
-        } catch (_: Exception) {}
-        database.cultivoDao().actualizar(cultivo.toEntity())
+        val actualizado = if (apiService != null) {
+            val response = apiService.actualizarCultivoBackend(
+                cultivo.id,
+                cultivo.cultivoToBackendRequest()
+            ).requireBody("actualizar cultivo").backendCultivoToDomain()
+            response.copy(
+                fechaCosechaEstimada = cultivo.fechaCosechaEstimada,
+                frecuenciaRiego = cultivo.frecuenciaRiego,
+                fechaCambioEstado = cultivo.fechaCambioEstado
+            )
+        } else {
+            cultivo
+        }
+        database.cultivoDao().actualizar(actualizado.toEntity())
     }
 
     override suspend fun eliminarCultivo(cultivo: Cultivo) {
-        try {
-            apiService?.eliminarCultivo(cultivo.id)
-        } catch (_: Exception) {}
+        apiService?.eliminarCultivo(cultivo.id)?.requireSuccessful("eliminar cultivo")
         database.cultivoDao().eliminar(cultivo.toEntity())
     }
 
@@ -529,18 +651,32 @@ class RoomHuertoRepository(
         estudiante: Usuario,
         actor: Usuario,
         actividad: ActividadTarea
-    ) {
-        try {
-            apiService?.guardarSector(sector.toDto())
-            apiService?.guardarTarea(tarea.toDto())
-        } catch (_: Exception) {}
+    ): Pair<Tarea, ActividadTarea> {
+        val guardada = if (apiService != null) {
+            val response = apiService.guardarTareaBackend(tarea.tareaToBackendRequest())
+                .requireBody("crear tarea")
+            response.backendTareaToDomain(
+                Cultivo(
+                    id = response.cultivoId.toString(),
+                    nombreComun = response.cultivoNombre,
+                    sectorId = sector.id,
+                    fechaSiembra = "",
+                    estadoDesarrollo = "Sembrado",
+                    frecuenciaRiego = "7"
+                )
+            )
+        } else {
+            tarea
+        }
+        val actividadGuardada = actividad.copy(tareaId = guardada.id)
         database.withTransaction {
             database.sectorDao().asegurar(sector.toEntity())
             database.usuarioDao().asegurar(estudiante.toEntity())
             database.usuarioDao().asegurar(actor.toEntity())
-            database.tareaDao().insertar(tarea.toEntity())
-            database.actividadTareaDao().insertar(actividad.toEntity())
+            database.tareaDao().insertar(guardada.toEntity())
+            database.actividadTareaDao().insertar(actividadGuardada.toEntity())
         }
+        return guardada to actividadGuardada
     }
 
     override suspend fun actualizarTarea(
@@ -550,10 +686,8 @@ class RoomHuertoRepository(
         actor: Usuario,
         actividad: ActividadTarea
     ) {
-        try {
-            apiService?.actualizarTarea(tarea.id, tarea.toDto())
-            apiService?.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
-        } catch (_: Exception) {}
+        apiService?.actualizarTareaBackend(tarea.id, tarea.tareaToBackendRequest())
+            ?.requireBody("actualizar tarea")
         database.withTransaction {
             database.usuarioDao().asegurar(actor.toEntity())
             database.usuarioDao().asegurar(estudiante.toEntity())

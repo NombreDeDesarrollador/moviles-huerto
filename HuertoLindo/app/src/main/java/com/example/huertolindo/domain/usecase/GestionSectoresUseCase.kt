@@ -52,8 +52,7 @@ class GestionSectoresUseCase(
             fechaInicioMantenimiento = inicioMantenimiento.trim().takeIf { estado == "En mantenimiento" }.orEmpty(),
             fechaTerminoMantenimiento = terminoMantenimiento.trim().takeIf { estado == "En mantenimiento" }.orEmpty()
         )
-        repository.guardarSector(sector)
-        return sector
+        return repository.guardarSector(sector)
     }
 
     suspend fun editarSector(

@@ -87,7 +87,7 @@ class SectoresCultivosViewModelTest {
 
     @Test
     fun agregarSectorExitosoParaAdministrador() = runTest {
-        coEvery { repository.guardarSector(any()) } returns Unit
+        coEvery { repository.guardarSector(any()) } answers { firstArg() }
 
         val viewModel = crearViewModel()
         val resultado = viewModel.agregarSector(
@@ -122,7 +122,7 @@ class SectoresCultivosViewModelTest {
 
     @Test
     fun agregarCultivoExitosoParaAdministrador() = runTest {
-        coEvery { repository.guardarCultivo(any(), any()) } returns Unit
+        coEvery { repository.guardarCultivo(any(), any()) } answers { firstArg() }
 
         val viewModel = crearViewModel()
         val resultado = viewModel.agregarCultivo(

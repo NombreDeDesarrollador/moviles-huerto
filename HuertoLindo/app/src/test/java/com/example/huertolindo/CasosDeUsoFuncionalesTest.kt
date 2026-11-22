@@ -218,7 +218,7 @@ class CasosDeUsoFuncionalesTest {
 
     @Test
     fun cu07_creacionYEdicionSectorValidoPorAdmin() = runTest {
-        coEvery { repository.guardarSector(any()) } returns Unit
+        coEvery { repository.guardarSector(any()) } answers { firstArg() }
         coEvery { repository.actualizarSector(any()) } returns Unit
 
         val vm = SectoresCultivosViewModel(
@@ -305,7 +305,7 @@ class CasosDeUsoFuncionalesTest {
 
     @Test
     fun cu10_registroCultivoValidoAsociadoASectorExistente() = runTest {
-        coEvery { repository.guardarCultivo(any(), any()) } returns Unit
+        coEvery { repository.guardarCultivo(any(), any()) } answers { firstArg() }
 
         val vm = SectoresCultivosViewModel(
             application, repository, testDispatcher,
@@ -385,7 +385,9 @@ class CasosDeUsoFuncionalesTest {
 
     @Test
     fun cu14_creacionYAsignacionTareaPorAdmin() = runTest {
-        coEvery { repository.crearTarea(any(), any(), any(), any(), any()) } returns Unit
+        coEvery { repository.crearTarea(any(), any(), any(), any(), any()) } answers {
+            firstArg<Tarea>() to arg<ActividadTarea>(4)
+        }
 
         val vm = TareasViewModel(application, repository, testDispatcher, GestionTareasUseCase(repository))
         advanceUntilIdle()
@@ -416,6 +418,9 @@ class CasosDeUsoFuncionalesTest {
 
     @Test
     fun cu15_asignacionGrupalDeTareasPorTaller() = runTest {
+        coEvery { repository.crearTarea(any(), any(), any(), any(), any()) } answers {
+            firstArg<Tarea>() to arg<ActividadTarea>(4)
+        }
         val estudiante2 = estudianteColaborador.copy(id = "usr-estudiante-2", correo = "estudiante2@huertolindo.cl")
         val useCase = GestionTareasUseCase(repository)
 
@@ -423,7 +428,7 @@ class CasosDeUsoFuncionalesTest {
             titulo = "Limpieza de pasillos",
             descripcion = "Barrer y ordenar",
             sector = sectorDemo,
-            cultivoId = null,
+            cultivoId = cultivoDemo.id,
             estudiantes = listOf(estudianteColaborador, estudiante2),
             actor = docenteAdmin,
             fechaProgramada = "2026-11-28",
@@ -433,6 +438,23 @@ class CasosDeUsoFuncionalesTest {
         assertEquals(2, tareas.size)
         assertEquals("usr-estudiante-1", tareas[0].first.asignadoA)
         assertEquals("usr-estudiante-2", tareas[1].first.asignadoA)
+    }
+
+    @Test
+    fun crearTareaSinCultivoAsociadoSeRechaza() = runTest {
+        val tareas = GestionTareasUseCase(repository).crearTareas(
+            titulo = "Limpieza de pasillos",
+            descripcion = "Barrer y ordenar",
+            sector = sectorDemo,
+            cultivoId = null,
+            estudiantes = listOf(estudianteColaborador),
+            actor = docenteAdmin,
+            fechaProgramada = "2026-11-28",
+            tipo = TipoTarea.MANTENIMIENTO
+        )
+
+        assertTrue(tareas.isEmpty())
+        coVerify(exactly = 0) { repository.crearTarea(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -664,7 +686,7 @@ class CasosDeUsoFuncionalesTest {
     @Test
     fun cu26_sincronizacionServidorPrimeroConRespaldoLocal() = runTest {
         val mockSector = sectorDemo.copy(id = "sec-nuevo", nombre = "Sector Florales")
-        coEvery { repository.guardarSector(mockSector) } returns Unit
+        coEvery { repository.guardarSector(mockSector) } returns mockSector
 
         repository.guardarSector(mockSector)
         coVerify(exactly = 1) { repository.guardarSector(mockSector) }

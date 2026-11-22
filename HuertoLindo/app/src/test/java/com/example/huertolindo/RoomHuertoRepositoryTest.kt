@@ -13,10 +13,10 @@ import com.example.huertolindo.data.local.UsuarioDao
 import com.example.huertolindo.data.local.ValidacionDao
 import com.example.huertolindo.data.local.entity.UsuarioEntity
 import com.example.huertolindo.data.remote.HuertoApiService
+import com.example.huertolindo.data.remote.BackendAuthResponseDto
+import com.example.huertolindo.data.remote.BackendSectorDto
+import com.example.huertolindo.data.remote.BackendUsuarioDto
 import com.example.huertolindo.data.remote.LoginRequestDto
-import com.example.huertolindo.data.remote.SectorDto
-import com.example.huertolindo.data.remote.UsuarioDto
-import com.example.huertolindo.data.remote.toDto
 import com.example.huertolindo.data.repository.RoomHuertoRepository
 import com.example.huertolindo.domain.model.Sector
 import com.example.huertolindo.domain.security.PasswordHasher
@@ -79,15 +79,14 @@ class RoomHuertoRepositoryTest {
 
     @Test
     fun autenticarLlamaAServidorYActualizaBaseLocal() = runTest {
-        val usuarioDto = UsuarioDto(
-            id = "usr-1",
-            nombre = "Docente",
-            apellido = "Huerto",
-            correo = "docente@huertolindo.cl",
-            perfil = "ADMIN",
-            tallerAsignado = "General",
-            passwordSalt = null,
-            passwordHash = null
+        val usuarioDto = BackendAuthResponseDto(
+            usuario = BackendUsuarioDto(
+                id = 1L,
+                nombre = "Docente Huerto",
+                correo = "docente@huertolindo.cl",
+                rol = "ADMIN",
+                activo = true
+            )
         )
         coEvery { api.login(any()) } returns Response.success(usuarioDto)
         coEvery { usuarioDao.obtenerPorCorreo("docente@huertolindo.cl") } returns null
@@ -96,10 +95,10 @@ class RoomHuertoRepositoryTest {
         val usuario = repository.autenticar("docente@huertolindo.cl", "HuertoDocente2026!")
 
         assertNotNull(usuario)
-        assertEquals("usr-1", usuario?.id)
+        assertEquals("1", usuario?.id)
         assertEquals(PermisosHuerto.ADMINISTRADOR, usuario?.perfil)
         coVerify { api.login(match { it.correo == "docente@huertolindo.cl" }) }
-        coVerify { usuarioDao.asegurar(match { it.id == "usr-1" }) }
+        coVerify { usuarioDao.asegurar(match { it.id == "1" }) }
     }
 
     @Test
@@ -138,18 +137,25 @@ class RoomHuertoRepositoryTest {
             estado = "Disponible",
             ubicacion = "Norte"
         )
-        val sectorDto = sector.toDto()
-        coEvery { api.guardarSector(any()) } returns Response.success(sectorDto)
+        coEvery { api.guardarSectorBackend(any()) } returns Response.success(
+            BackendSectorDto(
+                id = 15L,
+                nombre = "Sector Hortalizas",
+                descripcion = "Zona de prueba",
+                ubicacion = "Norte"
+            )
+        )
         coEvery { sectorDao.insertar(any()) } returns Unit
 
-        repository.guardarSector(sector)
+        val guardado = repository.guardarSector(sector)
 
-        coVerify { api.guardarSector(match { it.nombre == "Sector Hortalizas" }) }
-        coVerify { sectorDao.insertar(match { it.id == "sec-1" }) }
+        assertEquals("15", guardado.id)
+        coVerify { api.guardarSectorBackend(match { it.nombre == "Sector Hortalizas" }) }
+        coVerify { sectorDao.insertar(match { it.id == "15" }) }
     }
 
     @Test
-    fun guardarSectorHaceFallbackALocalSiFallaServidor() = runTest {
+    fun guardarSectorNoAparentaExitoSiFallaServidor() = runTest {
         val sector = Sector(
             id = "sec-offline",
             nombre = "Sector Offline",
@@ -157,12 +163,12 @@ class RoomHuertoRepositoryTest {
             estado = "Disponible",
             ubicacion = "Sur"
         )
-        coEvery { api.guardarSector(any()) } throws IOException("Sin conexion")
-        coEvery { sectorDao.insertar(any()) } returns Unit
+        coEvery { api.guardarSectorBackend(any()) } throws IOException("Sin conexion")
 
-        repository.guardarSector(sector)
+        val error = runCatching { repository.guardarSector(sector) }.exceptionOrNull()
 
-        coVerify { sectorDao.insertar(match { it.id == "sec-offline" }) }
+        assertNotNull(error)
+        coVerify(exactly = 0) { sectorDao.insertar(any()) }
     }
 
     @Test
@@ -179,4 +185,5 @@ class RoomHuertoRepositoryTest {
         coVerify { api.eliminarSector("sec-del") }
         coVerify { sectorDao.eliminar(match { it.id == "sec-del" }) }
     }
+
 }

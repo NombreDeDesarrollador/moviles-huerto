@@ -39,7 +39,7 @@ class AuthUseCase(
             passwordSalt = PasswordHasher.encodeBase64(salt),
             passwordHash = PasswordHasher.encodeBase64(PasswordHasher.hash(password, salt))
         )
-        repository.registrarUsuario(usuario)
+        repository.registrarUsuario(usuario, password)
         return usuario
     }
 

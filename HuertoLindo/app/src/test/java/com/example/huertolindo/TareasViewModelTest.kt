@@ -50,6 +50,15 @@ class TareasViewModelTest {
         ubicacion = "Norte"
     )
 
+    private val demoCultivo = Cultivo(
+        id = "cul-1",
+        nombreComun = "Tomates",
+        sectorId = "sec-1",
+        fechaSiembra = "2026-10-01",
+        estadoDesarrollo = "Sembrado",
+        frecuenciaRiego = "2"
+    )
+
     private val demoTarea = Tarea(
         id = "tar-1",
         titulo = "Regar tomates",
@@ -58,7 +67,8 @@ class TareasViewModelTest {
         asignadoA = "estudiante-1",
         estado = "Pendiente",
         fechaProgramada = "2026-10-15",
-        tipo = TipoTarea.RIEGO
+        tipo = TipoTarea.RIEGO,
+        cultivoId = "cul-1"
     )
 
     private val demoTareaPorValidar = Tarea(
@@ -69,7 +79,8 @@ class TareasViewModelTest {
         asignadoA = "estudiante-1",
         estado = "Por validar",
         fechaProgramada = "2026-10-16",
-        tipo = TipoTarea.OBSERVACION
+        tipo = TipoTarea.OBSERVACION,
+        cultivoId = "cul-1"
     )
 
     @Before
@@ -78,7 +89,7 @@ class TareasViewModelTest {
         coEvery { repository.inicializar() } returns Unit
         coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
             sectores = listOf(demoSector),
-            cultivos = emptyList(),
+            cultivos = listOf(demoCultivo),
             tareas = listOf(demoTarea, demoTareaPorValidar),
             evidencias = emptyList(),
             validaciones = emptyList(),
@@ -133,7 +144,7 @@ class TareasViewModelTest {
             titulo = "Regar el sector",
             descripcion = "Usar la manguera azul",
             sector = demoSector,
-            cultivo = null,
+            cultivo = demoCultivo,
             estudiante = demoEstudiante,
             actor = demoAdmin,
             fechaProgramada = "2026-10-20",

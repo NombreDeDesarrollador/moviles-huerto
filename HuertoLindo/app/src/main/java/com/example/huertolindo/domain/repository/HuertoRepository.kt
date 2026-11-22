@@ -18,7 +18,8 @@ data class HuertoSnapshot(
     val evidencias: List<Evidencia>,
     val validaciones: List<Validacion>,
     val reportesProblemas: List<ReporteProblema>,
-    val actividades: List<ActividadTarea>
+    val actividades: List<ActividadTarea>,
+    val advertencia: String? = null
 )
 
 interface HuertoRepository {
@@ -26,12 +27,14 @@ interface HuertoRepository {
     suspend fun obtenerUsuarios(): List<Usuario>
     suspend fun autenticar(correo: String, password: String): Usuario?
     suspend fun registrarUsuario(usuario: Usuario)
+    suspend fun registrarUsuario(usuario: Usuario, password: String) = registrarUsuario(usuario)
     suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean
     suspend fun cargarSnapshot(): HuertoSnapshot
-    suspend fun guardarSector(sector: Sector)
+    suspend fun cargarSnapshot(usuarioActual: Usuario): HuertoSnapshot = cargarSnapshot()
+    suspend fun guardarSector(sector: Sector): Sector
     suspend fun actualizarSector(sector: Sector)
     suspend fun eliminarSector(sector: Sector)
-    suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector)
+    suspend fun guardarCultivo(cultivo: Cultivo, sector: Sector): Cultivo
     suspend fun actualizarCultivo(cultivo: Cultivo)
     suspend fun eliminarCultivo(cultivo: Cultivo)
     suspend fun guardarEvidencia(evidencia: Evidencia)
@@ -41,7 +44,7 @@ interface HuertoRepository {
         estudiante: Usuario,
         actor: Usuario,
         actividad: ActividadTarea
-    )
+    ): Pair<Tarea, ActividadTarea>
     suspend fun actualizarTarea(
         tarea: Tarea,
         sector: Sector,

@@ -1534,7 +1534,7 @@ private fun FormularioCultivo(
         mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
     }
     var estado by rememberSaveable(cultivo?.id) {
-        mutableStateOf(cultivo?.estadoDesarrollo ?: "Planificado")
+        mutableStateOf(cultivo?.estadoDesarrollo ?: "Sembrado")
     }
     var frecuencia by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
     var mostrarError by rememberSaveable { mutableStateOf(false) }
@@ -1566,11 +1566,16 @@ private fun FormularioCultivo(
                 )
                 CampoSeleccion(
                     etiqueta = "Estado de desarrollo",
-                    opciones = (if (cultivo == null) {
-                        EstadoCultivo.opciones.filter { it in setOf("Planificado", "Sembrado") }
-                    } else {
-                        EstadoCultivo.opciones
-                    }).map { it to it },
+                    opciones = EstadoCultivo.opciones.filter {
+                        it in setOf(
+                            "Sembrado",
+                            "En crecimiento",
+                            "Desarrollo",
+                            "Listo para cosechar",
+                            "Cosechado",
+                            "Con problemas"
+                        )
+                    }.map { it to it },
                     seleccionado = estado,
                     onSeleccionar = { estado = it }
                 )
@@ -1659,11 +1664,11 @@ private fun FormularioTarea(
                     }
                 )
                 CampoSeleccion(
-                    etiqueta = "Cultivo (opcional)",
-                    opciones = listOf("" to "Sin cultivo asociado") +
-                        cultivos.filter { it.sectorId == sectorId }.map { it.id to it.nombreComun },
+                    etiqueta = "Cultivo",
+                    opciones = cultivos.filter { it.sectorId == sectorId }
+                        .map { it.id to it.nombreComun },
                     seleccionado = cultivoId.orEmpty(),
-                    onSeleccionar = { cultivoId = it.ifBlank { null } }
+                    onSeleccionar = { cultivoId = it }
                 )
                 CampoSeleccion(
                     etiqueta = "Estudiante o grupo",
@@ -1675,12 +1680,12 @@ private fun FormularioTarea(
                     seleccionado = usuarioId,
                     onSeleccionar = { usuarioId = it }
                 )
-                if (sectores.isEmpty() || estudiantes.isEmpty()) {
-                    Text("Se necesita al menos un sector y un estudiante registrado.")
+                if (sectores.isEmpty() || estudiantes.isEmpty() || cultivos.none { it.sectorId == sectorId }) {
+                    Text("Se necesita un sector, un cultivo asociado y un estudiante registrados en el backend.")
                 }
                 if (mostrarError) {
                     Text(
-                        "Completa los campos, selecciona sector y estudiante e ingresa una fecha válida (AAAA-MM-DD).",
+                        "Completa los campos, selecciona un cultivo y estudiante, e ingresa una fecha válida (AAAA-MM-DD).",
                         color = MaterialTheme.colorScheme.error
                     )
                 }

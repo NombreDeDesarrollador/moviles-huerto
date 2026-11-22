@@ -117,7 +117,7 @@ class AuthViewModelTest {
 
     @Test
     fun registroDeUsuarioExitoso() = runTest {
-        coEvery { repository.registrarUsuario(any()) } returns Unit
+        coEvery { repository.registrarUsuario(any(), any()) } returns Unit
 
         val viewModel = crearViewModel()
         var resultado: AuthViewModel.ResultadoRegistro? = null
@@ -134,7 +134,7 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertTrue(resultado is AuthViewModel.ResultadoRegistro.Exito)
-        coVerify { repository.registrarUsuario(match { it.correo == "carlos@huertolindo.cl" }) }
+        coVerify { repository.registrarUsuario(match { it.correo == "carlos@huertolindo.cl" }, "Password123!") }
     }
 
     @Test

@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.scan
@@ -143,8 +144,11 @@ class HuertoViewModel(
     val cargandoDatos: Boolean get() = _cargandoDatos.value
 
     private val _errorPersistencia = MutableStateFlow<String?>(null)
-    val errorPersistenciaState = _errorPersistencia.asStateFlow()
-    val errorPersistencia: String? get() = _errorPersistencia.value
+    private val _advertenciaBackend = MutableStateFlow<String?>(null)
+    val errorPersistenciaState = combine(_errorPersistencia, _advertenciaBackend) { error, advertencia ->
+        error ?: advertencia
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val errorPersistencia: String? get() = _errorPersistencia.value ?: _advertenciaBackend.value
 
     private val _isLoading = MutableStateFlow(false)
     val isLoadingState = _isLoading.asStateFlow()
@@ -152,7 +156,7 @@ class HuertoViewModel(
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessageState = _errorMessage.asStateFlow()
-    val errorMessage: String? get() = _errorMessage.value ?: _errorPersistencia.value
+    val errorMessage: String? get() = _errorMessage.value ?: errorPersistencia
 
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessageState = _successMessage.asStateFlow()
@@ -161,6 +165,7 @@ class HuertoViewModel(
     fun limpiarError() {
         _errorMessage.value = null
         _errorPersistencia.value = null
+        _advertenciaBackend.value = null
     }
 
     fun limpiarExito() {
@@ -196,6 +201,7 @@ class HuertoViewModel(
         _errorCargaUsuarios.map { Unit },
         _cargandoDatos.map { Unit },
         _errorPersistencia.map { Unit },
+        _advertenciaBackend.map { Unit },
         _isLoading.map { Unit },
         _errorMessage.map { Unit },
         _successMessage.map { Unit }
@@ -236,7 +242,8 @@ class HuertoViewModel(
             try {
                 val snapshot = withContext(ioDispatcher) {
                     huertoRepository.inicializar()
-                    huertoRepository.cargarSnapshot()
+                    _usuarioActual.value?.let { huertoRepository.cargarSnapshot(it) }
+                        ?: huertoRepository.cargarSnapshot()
                 }
                 aplicarSnapshot(snapshot)
                 _usuariosDisponibles.value = withContext(ioDispatcher) {
@@ -247,7 +254,12 @@ class HuertoViewModel(
                         huertoRepository.migrarEvidenciasLegacy(snapshot.evidencias)
                         huertoRepository.migrarHistorialLegacy(snapshot.actividades)
                     }
-                    aplicarSnapshot(withContext(ioDispatcher) { huertoRepository.cargarSnapshot() })
+                    aplicarSnapshot(
+                        withContext(ioDispatcher) {
+                            _usuarioActual.value?.let { huertoRepository.cargarSnapshot(it) }
+                                ?: huertoRepository.cargarSnapshot()
+                        }
+                    )
                 } catch (exception: SQLiteException) {
                     android.util.Log.e("HuertoViewModel", "No se pudieron migrar datos locales anteriores.", exception)
                     _errorPersistencia.value = "No se pudieron migrar algunos datos locales anteriores."
@@ -261,14 +273,20 @@ class HuertoViewModel(
                 _errorPersistencia.value = "No se pudieron cargar los datos guardados."
                 _cargandoDatos.value = false
             } catch (exception: IllegalStateException) {
-                android.util.Log.e("HuertoViewModel", "La base de datos del huerto no está lista.", exception)
-                _errorPersistencia.value = "No se pudo inicializar la base de datos del huerto."
+                android.util.Log.e("HuertoViewModel", "No se pudieron cargar los datos del huerto.", exception)
+                _errorPersistencia.value = exception.message
+                    ?: "No se pudieron cargar los datos del huerto."
+                _cargandoDatos.value = false
+            } catch (exception: Exception) {
+                android.util.Log.e("HuertoViewModel", "No se pudieron cargar los datos del backend.", exception)
+                _errorPersistencia.value = exception.message ?: "No se pudieron cargar los datos del backend."
                 _cargandoDatos.value = false
             }
         }
     }
 
     private fun aplicarSnapshot(snapshot: HuertoSnapshot) {
+        _advertenciaBackend.value = snapshot.advertencia
         _listaSectores.value = snapshot.sectores
         _listaCultivos.value = snapshot.cultivos
         _listaTareas.value = snapshot.tareas
@@ -288,10 +306,18 @@ class HuertoViewModel(
     private fun refrescarSnapshot() {
         viewModelScope.launch {
             try {
-                aplicarSnapshot(withContext(ioDispatcher) { huertoRepository.cargarSnapshot() })
+                aplicarSnapshot(
+                    withContext(ioDispatcher) {
+                        _usuarioActual.value?.let { huertoRepository.cargarSnapshot(it) }
+                            ?: huertoRepository.cargarSnapshot()
+                    }
+                )
             } catch (exception: SQLiteException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde Room.", exception)
                 _errorPersistencia.value = "No se pudieron actualizar los datos guardados."
+            } catch (exception: Exception) {
+                android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde el backend.", exception)
+                _errorPersistencia.value = exception.message ?: "No se pudieron actualizar los datos del backend."
             }
         }
     }
@@ -654,9 +680,10 @@ class HuertoViewModel(
             !TipoTarea.esValido(tipo) ||
             listaSectores.value.none { it.id == sectorId } ||
             asignados.isEmpty() ||
-            (cultivoId != null && listaCultivos.value.none {
+            cultivoId == null ||
+            listaCultivos.value.none {
                 it.id == cultivoId && it.sectorId == sectorId
-            })
+            }
         ) return false
 
         val actor = usuarioActual ?: return false
@@ -678,7 +705,20 @@ class HuertoViewModel(
         tareasCreadas.forEach { (tarea, estudiante) ->
             registrarActividad(tarea, "Creó y asignó la tarea", "Pendiente", estudiante.id)?.let {
                 persistir {
-                    huertoRepository.crearTarea(tarea, sector, estudiante, actor, it)
+                    val (tareaGuardada, actividadGuardada) = try {
+                        huertoRepository.crearTarea(tarea, sector, estudiante, actor, it)
+                    } catch (exception: Exception) {
+                        _listaTareas.value = _listaTareas.value.filterNot { actual -> actual.id == tarea.id }
+                        _historialActividades.value =
+                            _historialActividades.value.filterNot { actual -> actual.id == it.id }
+                        throw exception
+                    }
+                    _listaTareas.value = _listaTareas.value.map { actual ->
+                        if (actual.id == tarea.id) tareaGuardada else actual
+                    }
+                    _historialActividades.value = _historialActividades.value.map { actual ->
+                        if (actual.id == actividadGuardada.id) actividadGuardada else actual
+                    }
                 }
             }
         }
@@ -702,9 +742,10 @@ class HuertoViewModel(
             !ReglasHuerto.esFechaIsoValida(fechaProgramada) ||
             !TipoTarea.esValido(tipoActualizado) ||
             listaSectores.value.none { it.id == sectorId } ||
-            usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == PermisosHuerto.ESTUDIANTE }
+            usuariosDisponibles.value.none { it.id == usuarioId && it.perfil == PermisosHuerto.ESTUDIANTE } ||
+            cultivoId == null
         ) return false
-        if (cultivoId != null && listaCultivos.value.none {
+        if (listaCultivos.value.none {
                 it.id == cultivoId && it.sectorId == sectorId
             }
         ) return false
@@ -909,7 +950,17 @@ class HuertoViewModel(
             }.orEmpty()
         )
         _listaSectores.value = listaSectores.value + sector
-        persistir { huertoRepository.guardarSector(sector) }
+        persistir {
+            val guardado = try {
+                huertoRepository.guardarSector(sector)
+            } catch (exception: Exception) {
+                _listaSectores.value = _listaSectores.value.filterNot { it.id == sector.id }
+                throw exception
+            }
+            _listaSectores.value = _listaSectores.value.map {
+                if (it.id == sector.id) guardado else it
+            }
+        }
         return true
     }
 
@@ -986,7 +1037,17 @@ class HuertoViewModel(
         )
         _listaCultivos.value = listaCultivos.value + cultivo
         val sector = listaSectores.value.first { it.id == sectorId }
-        persistir { huertoRepository.guardarCultivo(cultivo, sector) }
+        persistir {
+            val guardado = try {
+                huertoRepository.guardarCultivo(cultivo, sector)
+            } catch (exception: Exception) {
+                _listaCultivos.value = _listaCultivos.value.filterNot { it.id == cultivo.id }
+                throw exception
+            }
+            _listaCultivos.value = _listaCultivos.value.map {
+                if (it.id == cultivo.id) guardado else it
+            }
+        }
         return true
     }
 
@@ -1038,13 +1099,18 @@ class HuertoViewModel(
     }
 
     fun cargarUsuariosDisponibles() {
+        if (!esAdministrador) {
+            _usuariosDisponibles.value = emptyList()
+            return
+        }
         viewModelScope.launch {
             try {
                 val usuarios = withContext(ioDispatcher) { huertoRepository.obtenerUsuarios() }
                 _usuariosDisponibles.value = usuarios
                 _errorCargaUsuarios.value = null
-            } catch (exception: SQLiteException) {
-                _errorCargaUsuarios.value = "No se pudieron cargar los estudiantes desde la base de datos."
+            } catch (exception: Exception) {
+                _errorCargaUsuarios.value = exception.message
+                    ?: "No se pudieron cargar los estudiantes desde el backend."
                 android.util.Log.e("HuertoViewModel", errorCargaUsuarios!!, exception)
             }
         }
@@ -1163,6 +1229,10 @@ class HuertoViewModel(
             if (resultado is ResultadoInicioSesion.Exito) {
                 _usuarioActual.value = resultado.usuario
                 _successMessage.value = "Sesión iniciada correctamente"
+                refrescarSnapshot()
+                if (PermisosHuerto.esAdministrador(resultado.usuario.perfil)) {
+                    cargarUsuariosDisponibles()
+                }
             } else if (resultado is ResultadoInicioSesion.CredencialesInvalidas) {
                 _errorMessage.value = "Credenciales inválidas"
             }
