@@ -4,7 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.FaceDetector
+import android.graphics.ImageDecoder
+import android.os.Build
 import android.util.Base64
 import androidx.room.withTransaction
 import com.example.huertolindo.data.local.HuertoDatabase
@@ -47,7 +48,6 @@ import com.example.huertolindo.domain.model.Validacion
 import com.example.huertolindo.domain.repository.HuertoRepository
 import com.example.huertolindo.domain.repository.HuertoSnapshot
 import com.example.huertolindo.domain.security.PasswordHasher
-import com.example.huertolindo.domain.security.EvidenciaNoSeguraException
 import com.example.huertolindo.domain.security.PermisosHuerto
 import org.json.JSONArray
 import org.json.JSONException
@@ -57,6 +57,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 
 class RoomHuertoRepository(
     context: Context,
@@ -509,7 +510,7 @@ class RoomHuertoRepository(
         cultivoId: String? = null,
         reporteId: String? = null
     ): Evidencia {
-        val bitmap = decodificarFotografiaSinRostros(imagenUri)
+        val bitmap = decodificarFotografia(imagenUri)
         val carpeta = File(context.filesDir, "evidencias")
         if (!carpeta.exists() && !carpeta.mkdirs()) {
             bitmap.recycle()
@@ -541,7 +542,31 @@ class RoomHuertoRepository(
         )
     }
 
-    private fun decodificarFotografiaSinRostros(uri: Uri): Bitmap {
+    private fun decodificarFotografia(uri: Uri): Bitmap {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return try {
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    val width = info.size.width
+                    val height = info.size.height
+                    if (width <= 0 || height <= 0) {
+                        throw IOException("La fotografía seleccionada no tiene un tamaño válido.")
+                    }
+                    val mayorLado = maxOf(width, height)
+                    if (mayorLado > 1600) {
+                        val escala = 1600f / mayorLado
+                        decoder.setTargetSize(
+                            (width * escala).roundToInt().coerceAtLeast(1),
+                            (height * escala).roundToInt().coerceAtLeast(1)
+                        )
+                    }
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }
+            } catch (exception: ImageDecoder.DecodeException) {
+                throw IOException("No se pudo analizar la fotografía seleccionada.", exception)
+            }
+        }
+
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
             BitmapFactory.decodeStream(input, null, bounds)
@@ -555,36 +580,15 @@ class RoomHuertoRepository(
         }
         val options = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.RGB_565
         }
         val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
             BitmapFactory.decodeStream(input, null, options)
         } ?: throw IOException("No se pudo analizar la fotografía seleccionada.")
-        val ancho = bitmap.width - bitmap.width % 2
-        val alto = bitmap.height - bitmap.height % 2
-        if (ancho <= 0 || alto <= 0) {
+        if (bitmap.width <= 0 || bitmap.height <= 0) {
             bitmap.recycle()
             throw IOException("La fotografía seleccionada no tiene un tamaño válido.")
         }
-        val compatible = if (ancho == bitmap.width && alto == bitmap.height) {
-            bitmap
-        } else {
-            Bitmap.createBitmap(bitmap, 0, 0, ancho, alto).also { bitmap.recycle() }
-        }
-        var fotografiaValida = false
-        try {
-            if (FaceDetector(ancho, alto, 1)
-                    .findFaces(compatible, arrayOfNulls(1)) > 0
-            ) {
-                throw EvidenciaNoSeguraException(
-                    "No se admiten fotografías con rostros detectados. Usa imágenes de plantas o herramientas."
-                )
-            }
-            fotografiaValida = true
-            return compatible
-        } finally {
-            if (!fotografiaValida) compatible.recycle()
-        }
+        return bitmap
     }
 
     override suspend fun eliminarEvidencia(evidencia: Evidencia) {

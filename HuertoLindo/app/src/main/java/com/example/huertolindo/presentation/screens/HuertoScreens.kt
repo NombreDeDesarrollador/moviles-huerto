@@ -1162,7 +1162,7 @@ fun CalendarioHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
     ScreenLayout("Galería del huerto", onBack) {
-        Text("Imágenes de demostración de plantas y herramientas; no se admiten rostros.")
+        Text("Puedes adjuntar fotografías de cualquier tipo.")
         val tareasVisibles = viewModel.tareasVisibles.map { it.id }.toSet()
         val evidencias = uiState.evidencias.filter { evidencia ->
             when {
@@ -1439,7 +1439,7 @@ private fun FormularioReporteProblema(
                         contentScale = ContentScale.Crop
                     )
                 }
-                Text("Usa una imagen de prueba de plantas o herramientas; no incluyas rostros ni datos personales.")
+                Text("Se aceptan fotografías de cualquier tipo.")
                 if (sectores.isEmpty()) {
                     Text("Primero debe existir al menos un sector.")
                 }

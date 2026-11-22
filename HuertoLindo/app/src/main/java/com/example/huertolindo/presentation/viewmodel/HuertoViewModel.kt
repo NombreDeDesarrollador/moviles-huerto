@@ -13,7 +13,6 @@ import com.example.huertolindo.domain.repository.HuertoSnapshot
 import com.example.huertolindo.domain.security.PermisosHuerto
 import com.example.huertolindo.domain.security.ReglasHuerto
 import com.example.huertolindo.domain.security.PasswordHasher
-import com.example.huertolindo.domain.security.EvidenciaNoSeguraException
 import com.example.huertolindo.presentation.state.HuertoUiState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -356,9 +355,6 @@ class HuertoViewModel(
                         imagenUri.toString()
                     )
                 }
-            } catch (exception: EvidenciaNoSeguraException) {
-                onResult(exception.message)
-                return@launch
             } catch (exception: IOException) {
                 onResult(exception.message ?: "No se pudo guardar la fotografía. Inténtalo nuevamente.")
                 return@launch
@@ -465,8 +461,6 @@ class HuertoViewModel(
                 }
                 _evidenciasTareas.value = evidenciasTareas.value + evidencia
                 onResult(null)
-            } catch (exception: EvidenciaNoSeguraException) {
-                onResult(exception.message)
             } catch (exception: IOException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar la fotografía.", exception)
                 onResult(exception.message ?: "No se pudo guardar la fotografía. Inténtalo nuevamente.")
@@ -820,9 +814,6 @@ class HuertoViewModel(
                 refrescarSnapshot()
                 _errorReportesProblemas.value = null
                 onResult(null)
-            } catch (exception: EvidenciaNoSeguraException) {
-                _errorReportesProblemas.value = exception.message
-                onResult(exception.message)
             } catch (exception: IOException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar la fotografía del reporte.", exception)
                 _errorReportesProblemas.value = "No se pudo guardar la fotografía del reporte."
