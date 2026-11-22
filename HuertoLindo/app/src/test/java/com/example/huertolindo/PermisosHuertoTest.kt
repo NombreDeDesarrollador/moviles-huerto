@@ -86,12 +86,33 @@ class PermisosHuertoTest {
     }
 
     @Test
-    fun soloEstudianteResponsablePuedeEliminarEvidenciaDeTarea() {
+    fun estudianteSoloPuedeEliminarEvidenciaMientrasPuedeEditarLaTarea() {
         assertTrue(
             PermisosHuerto.puedeEliminarEvidenciaTarea(
                 PermisosHuerto.ESTUDIANTE,
                 "estudiante-1",
                 tareas[0]
+            )
+        )
+        assertTrue(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[2].copy(estado = "Rechazada")
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[2]
+            )
+        )
+        assertFalse(
+            PermisosHuerto.puedeEliminarEvidenciaTarea(
+                PermisosHuerto.ESTUDIANTE,
+                "estudiante-1",
+                tareas[2].copy(estado = "Validada")
             )
         )
         assertFalse(

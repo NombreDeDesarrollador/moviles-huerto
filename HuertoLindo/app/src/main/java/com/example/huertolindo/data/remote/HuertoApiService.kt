@@ -123,7 +123,10 @@ interface HuertoApiService {
     suspend fun eliminarTarea(@Path("id") id: String): Response<Void>
 
     @PATCH("tareas/{id}/estado")
-    suspend fun actualizarEstadoTarea(@Path("id") id: String, @Body estadoMap: Map<String, String>): Response<TareaDto>
+    suspend fun actualizarEstadoTarea(
+        @Path("id") id: String,
+        @Body estadoMap: Map<String, String>
+    ): Response<BackendTareaDto>
 
     // Evidencias
     @GET("evidencias")
@@ -148,6 +151,11 @@ interface HuertoApiService {
 
     @POST("validaciones")
     suspend fun guardarValidacion(@Body validacion: ValidacionDto): Response<ValidacionDto>
+
+    @POST("validaciones")
+    suspend fun guardarValidacionBackend(
+        @Body validacion: BackendValidacionRequestDto
+    ): Response<BackendValidacionDto>
 
     @PUT("validaciones/{id}")
     suspend fun actualizarValidacion(@Path("id") id: String, @Body validacion: ValidacionDto): Response<ValidacionDto>

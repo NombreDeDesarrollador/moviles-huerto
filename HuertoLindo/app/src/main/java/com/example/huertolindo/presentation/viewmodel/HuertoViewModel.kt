@@ -371,6 +371,16 @@ class HuertoViewModel(
                 "Entregó la tarea con comentario y evidencia",
                 "Por validar"
             )
+            suspend fun revertirEntregaLocal() {
+                withContext(ioDispatcher) {
+                    huertoRepository.eliminarArchivoEvidencia(evidencia.rutaArchivo)
+                }
+                _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidencia.id }
+                _comentariosEntrega.value = comentariosEntrega.value - tareaId
+                actividad?.let { evento ->
+                    _historialActividades.value = historialActividades.value.filterNot { it.id == evento.id }
+                }
+            }
             try {
                 withContext(ioDispatcher) {
                     huertoRepository.entregarTarea(
@@ -382,17 +392,20 @@ class HuertoViewModel(
                 }
                 actualizarTarea(tareaEntregada)
             } catch (exception: SQLiteException) {
-                withContext(ioDispatcher) {
-                    huertoRepository.eliminarArchivoEvidencia(evidencia.rutaArchivo)
-                }
-                _evidenciasTareas.value = evidenciasTareas.value.filterNot { it.id == evidencia.id }
-                _comentariosEntrega.value = comentariosEntrega.value - tareaId
-                actividad?.let { evento ->
-                    _historialActividades.value = historialActividades.value.filterNot { it.id == evento.id }
-                }
+                revertirEntregaLocal()
                 android.util.Log.e("HuertoViewModel", "No se pudo guardar la entrega en Room.", exception)
                 _errorPersistencia.value = "No se pudo guardar la entrega en la base de datos."
                 onResult(errorPersistencia)
+                return@launch
+            } catch (exception: IOException) {
+                revertirEntregaLocal()
+                android.util.Log.e("HuertoViewModel", "No se pudo sincronizar la entrega con el backend.", exception)
+                onResult("No se pudo enviar la entrega al servidor. Verifica tu conexión e inténtalo nuevamente.")
+                return@launch
+            } catch (exception: IllegalStateException) {
+                revertirEntregaLocal()
+                android.util.Log.e("HuertoViewModel", "El backend rechazó la entrega.", exception)
+                onResult(exception.message ?: "El servidor no pudo guardar la entrega.")
                 return@launch
             }
             onResult(null)

@@ -27,6 +27,7 @@ import com.example.huertolindo.data.remote.toDomain as backendTareaToDomain
 import com.example.huertolindo.data.remote.toBackendRequest as sectorToBackendRequest
 import com.example.huertolindo.data.remote.toBackendRequest as cultivoToBackendRequest
 import com.example.huertolindo.data.remote.toBackendRequest as tareaToBackendRequest
+import com.example.huertolindo.data.remote.toBackendRequest as validacionToBackendRequest
 import com.example.huertolindo.data.remote.toCultivoEstadoBackend
 import com.example.huertolindo.data.remote.toDomain
 import com.example.huertolindo.data.remote.toDto
@@ -691,8 +692,17 @@ class RoomHuertoRepository(
         actor: Usuario,
         actividad: ActividadTarea
     ) {
-        apiService?.actualizarTareaBackend(tarea.id, tarea.tareaToBackendRequest())
-            ?.requireBody("actualizar tarea")
+        if (apiService != null) {
+            if (actor.perfil == PermisosHuerto.ESTUDIANTE) {
+                apiService.actualizarEstadoTarea(
+                    tarea.id,
+                    mapOf("estado" to tarea.toTareaEstadoBackend())
+                ).requireBody("actualizar estado de tarea")
+            } else {
+                apiService.actualizarTareaBackend(tarea.id, tarea.tareaToBackendRequest())
+                    .requireBody("actualizar tarea")
+            }
+        }
         database.withTransaction {
             database.usuarioDao().asegurar(actor.toEntity())
             database.usuarioDao().asegurar(estudiante.toEntity())
@@ -708,22 +718,24 @@ class RoomHuertoRepository(
         estudiante: Usuario,
         actividad: ActividadTarea
     ) {
-        try {
-            if (apiService != null) {
-                val archivo = File(evidencia.rutaArchivo)
-                if (archivo.exists()) {
-                    val reqFile = archivo.asRequestBody("image/jpeg".toMediaTypeOrNull())
-                    val part = MultipartBody.Part.createFormData("file", archivo.name, reqFile)
-                    val tareaIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val comPart = evidencia.descripcion.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val tipoPart = "TAREA".toRequestBody("text/plain".toMediaTypeOrNull())
-                    val entidadIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
-                    apiService.subirEvidencia(part, tareaIdPart, comPart, tipoPart, entidadIdPart)
-                }
-                apiService.actualizarTarea(tarea.id, tarea.toDto())
-                apiService.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
+        if (apiService != null) {
+            val archivo = File(evidencia.rutaArchivo)
+            if (!archivo.isFile) {
+                throw IOException("No se encontró el archivo de evidencia.")
             }
-        } catch (_: Exception) {}
+            val reqFile = archivo.asRequestBody("image/jpeg".toMediaTypeOrNull())
+            val part = MultipartBody.Part.createFormData("file", archivo.name, reqFile)
+            val tareaIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
+            val comPart = evidencia.descripcion.toRequestBody("text/plain".toMediaTypeOrNull())
+            val tipoPart = "TAREA".toRequestBody("text/plain".toMediaTypeOrNull())
+            val entidadIdPart = tarea.id.toRequestBody("text/plain".toMediaTypeOrNull())
+            apiService.subirEvidencia(part, tareaIdPart, comPart, tipoPart, entidadIdPart)
+                .requireBody("subir evidencia")
+            apiService.actualizarEstadoTarea(
+                tarea.id,
+                mapOf("estado" to tarea.toTareaEstadoBackend())
+            ).requireBody("entregar tarea")
+        }
         database.withTransaction {
             database.usuarioDao().asegurar(estudiante.toEntity())
             database.tareaDao().actualizar(tarea.toEntity())
@@ -738,11 +750,8 @@ class RoomHuertoRepository(
         actividad: ActividadTarea,
         administrador: Usuario
     ) {
-        try {
-            apiService?.actualizarTarea(tarea.id, tarea.toDto())
-            apiService?.actualizarEstadoTarea(tarea.id, mapOf("estado" to tarea.toTareaEstadoBackend()))
-            apiService?.guardarValidacion(validacion.toDto())
-        } catch (_: Exception) {}
+        apiService?.guardarValidacionBackend(validacion.validacionToBackendRequest())
+            ?.requireBody("guardar validación")
         database.withTransaction {
             database.usuarioDao().asegurar(administrador.toEntity())
             database.usuarioDao().asegurar(

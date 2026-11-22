@@ -41,9 +41,7 @@ object PermisosHuerto {
         usuarioId: String?,
         tarea: Tarea
     ): Boolean =
-        perfil == ESTUDIANTE &&
-            usuarioId != null &&
-            tarea.asignadoA == usuarioId
+        puedeAdjuntarEvidenciaTarea(perfil, usuarioId, tarea)
 
     fun puedeIniciarTarea(perfil: String, usuarioId: String, tarea: Tarea): Boolean =
         perfil == ESTUDIANTE &&

@@ -236,7 +236,7 @@ fun String.toTareaEstadoBackend(): String = when (this.trim().uppercase(Locale.R
     "VALIDADA" -> "VALIDADA"
     "RECHAZADA" -> "RECHAZADA"
     "ATRASADA" -> "ATRASADA"
-    "COMPLETADA" -> "VALIDADA"
+    "COMPLETADA" -> "COMPLETADA"
     else -> this.uppercase(Locale.ROOT).replace(" ", "_")
 }
 

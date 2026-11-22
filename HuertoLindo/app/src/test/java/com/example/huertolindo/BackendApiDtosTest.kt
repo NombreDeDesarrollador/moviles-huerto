@@ -49,7 +49,8 @@ class BackendApiDtosTest {
             cultivoId = 12L,
             cultivoNombre = "Lechuga",
             responsableId = 8L,
-            responsableNombre = "Estudiante"
+            responsableNombre = "Estudiante",
+            estado = "PENDIENTE_VALIDACION"
         ).toDomain(cultivo)
 
         assertEquals("31", tarea.id)
@@ -57,6 +58,7 @@ class BackendApiDtosTest {
         assertEquals("12", tarea.cultivoId)
         assertEquals("8", tarea.asignadoA)
         assertEquals(TipoTarea.RIEGO, tarea.tipo)
+        assertEquals("Por validar", tarea.estado)
     }
 
     @Test
@@ -76,6 +78,7 @@ class BackendApiDtosTest {
         assertEquals(12L, request.cultivoId)
         assertEquals(8L, request.responsableId)
         assertEquals("RIEGO", request.tipo)
+        assertEquals("PENDIENTE", request.estado)
     }
 
     @Test(expected = IllegalArgumentException::class)

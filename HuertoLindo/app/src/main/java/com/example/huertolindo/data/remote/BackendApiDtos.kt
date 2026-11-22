@@ -5,6 +5,7 @@ import com.example.huertolindo.domain.model.Cultivo
 import com.example.huertolindo.domain.model.Sector
 import com.example.huertolindo.domain.model.Tarea
 import com.example.huertolindo.domain.model.Usuario
+import com.example.huertolindo.domain.model.Validacion
 import com.example.huertolindo.domain.security.PermisosHuerto
 import java.util.Locale
 
@@ -67,7 +68,8 @@ data class BackendTareaDto(
     @SerializedName("cultivoId") val cultivoId: Long,
     @SerializedName("cultivoNombre") val cultivoNombre: String,
     @SerializedName("responsableId") val responsableId: Long,
-    @SerializedName("responsableNombre") val responsableNombre: String
+    @SerializedName("responsableNombre") val responsableNombre: String,
+    @SerializedName("estado") val estado: String? = null
 )
 
 data class BackendTareaRequestDto(
@@ -76,8 +78,27 @@ data class BackendTareaRequestDto(
     @SerializedName("tipo") val tipo: String,
     @SerializedName("fechaProgramada") val fechaProgramada: String,
     @SerializedName("completada") val completada: Boolean,
+    @SerializedName("estado") val estado: String,
     @SerializedName("cultivoId") val cultivoId: Long,
     @SerializedName("responsableId") val responsableId: Long
+)
+
+data class BackendValidacionRequestDto(
+    @SerializedName("aprobado") val aprobado: Boolean,
+    @SerializedName("observacion") val observacion: String?,
+    @SerializedName("tareaId") val tareaId: Long?,
+    @SerializedName("evidenciaId") val evidenciaId: Long?
+)
+
+data class BackendValidacionDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("aprobado") val aprobado: Boolean,
+    @SerializedName("observacion") val observacion: String?,
+    @SerializedName("fechaValidacion") val fechaValidacion: String,
+    @SerializedName("validadorId") val validadorId: Long,
+    @SerializedName("validadorNombre") val validadorNombre: String,
+    @SerializedName("tareaId") val tareaId: Long?,
+    @SerializedName("evidenciaId") val evidenciaId: Long?
 )
 
 fun BackendUsuarioDto.toDomain(): Usuario = Usuario(
@@ -140,7 +161,7 @@ fun BackendTareaDto.toDomain(cultivo: Cultivo): Tarea = Tarea(
     descripcion = descripcion.orEmpty(),
     sectorId = cultivo.sectorId,
     asignadoA = responsableId.toString(),
-    estado = if (completada) "Completada" else "Pendiente",
+    estado = estado?.toEstadoTareaHuerto() ?: if (completada) "Completada" else "Pendiente",
     fechaProgramada = fechaProgramada,
     tipo = tipo.toTipoTareaHuerto(),
     cultivoId = cultivoId.toString()
@@ -153,11 +174,31 @@ fun Tarea.toBackendRequest(): BackendTareaRequestDto = BackendTareaRequestDto(
     fechaProgramada = fechaProgramada,
     completada = estado.equals("Completada", ignoreCase = true) ||
         estado.equals("Validada", ignoreCase = true),
+    estado = estado.toTareaEstadoBackend(),
     cultivoId = cultivoId?.toLongOrNull()
         ?: throw IllegalArgumentException("Debes asociar la tarea a un cultivo existente en el backend."),
     responsableId = asignadoA.toLongOrNull()
         ?: throw IllegalArgumentException("El estudiante asignado no existe en el backend.")
 )
+
+fun Validacion.toBackendRequest(): BackendValidacionRequestDto = BackendValidacionRequestDto(
+    aprobado = resultado.equals("Validada", ignoreCase = true),
+    observacion = observaciones.takeIf { it.isNotBlank() },
+    tareaId = tareaId.toLongOrNull()
+        ?: throw IllegalArgumentException("La tarea no existe en el backend."),
+    evidenciaId = null
+)
+
+private fun String.toEstadoTareaHuerto(): String = when (trim().uppercase(Locale.ROOT)) {
+    "PENDIENTE" -> "Pendiente"
+    "EN_DESARROLLO", "EN DESARROLLO" -> "En desarrollo"
+    "PENDIENTE_VALIDACION", "PENDIENTE DE VALIDACION", "PENDIENTE DE VALIDACIÓN", "POR VALIDAR" -> "Por validar"
+    "VALIDADA" -> "Validada"
+    "RECHAZADA" -> "Rechazada"
+    "ATRASADA" -> "Atrasada"
+    "COMPLETADA" -> "Completada"
+    else -> this
+}
 
 private fun String.toCultivoEstadoHuerto(): String = when (trim().uppercase(Locale.ROOT)) {
     "SEMBRADO" -> "Sembrado"

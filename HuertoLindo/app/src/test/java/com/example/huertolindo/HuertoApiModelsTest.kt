@@ -167,7 +167,7 @@ class HuertoApiModelsTest {
             "Validada" to "VALIDADA",
             "Rechazada" to "RECHAZADA",
             "Atrasada" to "ATRASADA",
-            "Completada" to "VALIDADA"
+            "Completada" to "COMPLETADA"
         )
 
         estadosDomain.forEach { (domainEstado, esperadoBackend) ->
