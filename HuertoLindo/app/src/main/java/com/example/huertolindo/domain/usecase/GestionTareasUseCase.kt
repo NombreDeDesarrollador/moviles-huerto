@@ -70,6 +70,69 @@ class GestionTareasUseCase(
         return resultado
     }
 
+    fun puedeEditarTarea(
+        tarea: Tarea,
+        titulo: String,
+        descripcion: String,
+        sector: Sector,
+        cultivo: Cultivo?,
+        estudiante: Usuario,
+        actor: Usuario,
+        fechaProgramada: String,
+        tipo: String
+    ): Boolean =
+        PermisosHuerto.esAdministrador(actor.perfil) &&
+            !PermisosHuerto.esTareaCompletada(tarea.estado) &&
+            titulo.isNotBlank() &&
+            descripcion.isNotBlank() &&
+            ReglasHuerto.esFechaIsoValida(fechaProgramada) &&
+            TipoTarea.esValido(tipo) &&
+            estudiante.perfil.equals(PermisosHuerto.ESTUDIANTE, ignoreCase = true) &&
+            (cultivo == null || cultivo.sectorId == sector.id)
+
+    suspend fun editarTarea(
+        tarea: Tarea,
+        titulo: String,
+        descripcion: String,
+        sector: Sector,
+        cultivo: Cultivo?,
+        estudiante: Usuario,
+        actor: Usuario,
+        fechaProgramada: String,
+        tipo: String
+    ): Pair<Tarea, ActividadTarea>? {
+        if (!puedeEditarTarea(
+                tarea, titulo, descripcion, sector, cultivo,
+                estudiante, actor, fechaProgramada, tipo
+            )
+        ) return null
+
+        val actualizada = tarea.copy(
+            titulo = titulo.trim(),
+            descripcion = descripcion.trim(),
+            sectorId = sector.id,
+            cultivoId = cultivo?.id,
+            asignadoA = estudiante.id,
+            estado = "Pendiente",
+            motivoRechazo = "",
+            fechaProgramada = fechaProgramada.trim(),
+            tipo = tipo
+        )
+        val actividad = ActividadTarea(
+            id = UUID.randomUUID().toString(),
+            tareaId = actualizada.id,
+            tituloTarea = actualizada.titulo,
+            usuarioRelacionadoId = estudiante.id,
+            usuarioId = actor.id,
+            nombreUsuario = actor.nombreCompleto,
+            accion = "Editó la tarea",
+            estado = actualizada.estado,
+            fecha = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).format(Date())
+        )
+        repository.actualizarTarea(actualizada, sector, estudiante, actor, actividad)
+        return actualizada to actividad
+    }
+
     suspend fun iniciarTarea(tarea: Tarea, usuario: Usuario): Pair<Tarea, ActividadTarea>? {
         if (!PermisosHuerto.puedeIniciarTarea(usuario.perfil, usuario.id, tarea)) return null
         val actualizada = tarea.copy(estado = "En desarrollo")

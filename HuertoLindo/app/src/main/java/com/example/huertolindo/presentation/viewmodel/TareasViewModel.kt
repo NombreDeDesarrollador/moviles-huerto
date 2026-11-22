@@ -115,6 +115,56 @@ class TareasViewModel(
         return true
     }
 
+    fun editarTarea(
+        tareaId: String,
+        titulo: String,
+        descripcion: String,
+        sector: Sector,
+        cultivo: Cultivo?,
+        estudiante: Usuario,
+        actor: Usuario,
+        fechaProgramada: String,
+        tipo: String
+    ): Boolean {
+        val tarea = tareas.firstOrNull { it.id == tareaId } ?: return false
+        if (!tareasUseCase.puedeEditarTarea(
+                tarea, titulo, descripcion, sector, cultivo,
+                estudiante, actor, fechaProgramada, tipo
+            )
+        ) {
+            _uiState.update { it.copy(errorMessage = "No se pudieron validar los datos de la tarea.") }
+            return false
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                val resultado = withContext(ioDispatcher) {
+                    tareasUseCase.editarTarea(
+                        tarea, titulo, descripcion, sector, cultivo, estudiante,
+                        actor, fechaProgramada, tipo
+                    )
+                }
+                if (resultado == null) {
+                    throw IllegalStateException("No se pudieron validar los datos de la tarea.")
+                }
+                _uiState.update {
+                    it.copy(
+                        tareas = it.tareas.map { actual ->
+                            if (actual.id == tareaId) resultado.first else actual
+                        },
+                        successMessage = "Tarea actualizada",
+                        errorMessage = null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "Error al editar tarea: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+        return true
+    }
+
     fun iniciarTarea(
         tareaId: String,
         usuario: Usuario,

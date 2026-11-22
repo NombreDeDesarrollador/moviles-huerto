@@ -125,6 +125,71 @@ class TareasViewModelTest {
     }
 
     @Test
+    fun editarTareaActualizaLosDatosYRegistraLaActividad() = runTest {
+        coEvery { repository.actualizarTarea(any(), any(), any(), any(), any()) } returns Unit
+        val viewModel = crearViewModel()
+        val resultado = viewModel.editarTarea(
+            tareaId = demoTarea.id,
+            titulo = "Regar el sector",
+            descripcion = "Usar la manguera azul",
+            sector = demoSector,
+            cultivo = null,
+            estudiante = demoEstudiante,
+            actor = demoAdmin,
+            fechaProgramada = "2026-10-20",
+            tipo = TipoTarea.RIEGO
+        )
+        advanceUntilIdle()
+
+        assertTrue(resultado)
+        val actualizada = viewModel.tareas.first { it.id == demoTarea.id }
+        assertEquals("Regar el sector", actualizada.titulo)
+        assertEquals("Pendiente", actualizada.estado)
+        coVerify {
+            repository.actualizarTarea(
+                match { it.id == demoTarea.id && it.titulo == "Regar el sector" },
+                demoSector,
+                demoEstudiante,
+                demoAdmin,
+                match { it.accion == "Editó la tarea" }
+            )
+        }
+    }
+
+    @Test
+    fun editarTareaNoPermiteModificarUnaTareaCompletada() = runTest {
+        val tareaCompletada = demoTarea.copy(estado = "Validada")
+        coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
+            sectores = listOf(demoSector),
+            cultivos = emptyList(),
+            tareas = listOf(tareaCompletada),
+            evidencias = emptyList(),
+            validaciones = emptyList(),
+            reportesProblemas = emptyList(),
+            actividades = emptyList()
+        )
+        val viewModel = crearViewModel()
+
+        val resultado = viewModel.editarTarea(
+            tareaId = tareaCompletada.id,
+            titulo = "No debería cambiar",
+            descripcion = "Tarea cerrada",
+            sector = demoSector,
+            cultivo = null,
+            estudiante = demoEstudiante,
+            actor = demoAdmin,
+            fechaProgramada = "2026-10-20",
+            tipo = TipoTarea.RIEGO
+        )
+        advanceUntilIdle()
+
+        assertFalse(resultado)
+        assertEquals("Validada", viewModel.tareas.first().estado)
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        coVerify(exactly = 0) { repository.actualizarTarea(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun entregarTareaConFotoYComentarioCambiaAPorValidar() = runTest {
         val tareaEnDesarrollo = demoTarea.copy(estado = "En desarrollo")
         coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
