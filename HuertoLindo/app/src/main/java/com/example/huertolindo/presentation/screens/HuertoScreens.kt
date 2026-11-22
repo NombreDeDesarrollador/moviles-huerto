@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -66,14 +67,15 @@ fun SectoresScreen(
 ) {
     val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
-    var mostrarFormulario by remember { mutableStateOf(false) }
-    var sectorEnEdicion by remember { mutableStateOf<Sector?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
+    var sectorEnEdicionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val sectorEnEdicion = uiState.sectores.firstOrNull { it.id == sectorEnEdicionId }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     ScreenLayout("Sectores del huerto", onBack) {
         uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (esAdministrador) {
             Button(onClick = {
-                sectorEnEdicion = null
+                sectorEnEdicionId = null
                 mostrarFormulario = true
             }) { Text("Agregar sector") }
             AnimatedVisibility(visible = error != null) {
@@ -99,7 +101,7 @@ fun SectoresScreen(
                     }
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
-                            sectorEnEdicion = sector
+                            sectorEnEdicionId = sector.id
                             mostrarFormulario = true
                         }) { Text("Editar sector") }
                         OutlinedButton(onClick = {
@@ -116,7 +118,7 @@ fun SectoresScreen(
             sector = sectorEnEdicion,
             onDismiss = {
                 mostrarFormulario = false
-                sectorEnEdicion = null
+                sectorEnEdicionId = null
             },
             onSave = { nombre, ubicacion, descripcion, estado, inicio, termino ->
                 val guardado = sectorEnEdicion?.let {
@@ -125,7 +127,7 @@ fun SectoresScreen(
                 if (guardado) {
                     error = null
                     mostrarFormulario = false
-                    sectorEnEdicion = null
+                    sectorEnEdicionId = null
                 } else {
                     error = "Completa el nombre, la ubicación y la descripción del sector."
                 }
@@ -144,9 +146,10 @@ fun DetalleSectorScreen(
 ) {
     val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
-    var mostrarFormulario by remember { mutableStateOf(false) }
-    var cultivoEnEdicion by remember { mutableStateOf<Cultivo?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
+    var cultivoEnEdicionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val cultivoEnEdicion = uiState.cultivos.firstOrNull { it.id == cultivoEnEdicionId }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     val sector = uiState.sectores.firstOrNull { it.id == sectorId }
     ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack) {
         uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -163,7 +166,7 @@ fun DetalleSectorScreen(
         Text("Cultivos", style = MaterialTheme.typography.titleLarge)
         if (esAdministrador) {
             Button(onClick = {
-                cultivoEnEdicion = null
+                cultivoEnEdicionId = null
                 mostrarFormulario = true
             }) { Text("Agregar cultivo") }
             AnimatedVisibility(visible = error != null) {
@@ -191,7 +194,7 @@ fun DetalleSectorScreen(
                     )
                     if (esAdministrador) {
                         OutlinedButton(onClick = {
-                            cultivoEnEdicion = cultivo
+                            cultivoEnEdicionId = cultivo.id
                             mostrarFormulario = true
                         }) { Text("Editar cultivo") }
                         OutlinedButton(onClick = {
@@ -207,7 +210,7 @@ fun DetalleSectorScreen(
             cultivo = cultivoEnEdicion,
             onDismiss = {
                 mostrarFormulario = false
-                cultivoEnEdicion = null
+                cultivoEnEdicionId = null
             },
             onSave = { nombre, fechaSiembra, fechaCosecha, estado, frecuencia ->
                 val guardado = cultivoEnEdicion?.let {
@@ -230,7 +233,7 @@ fun DetalleSectorScreen(
                 if (guardado) {
                     error = null
                     mostrarFormulario = false
-                    cultivoEnEdicion = null
+                    cultivoEnEdicionId = null
                 } else {
                     error = "Completa los datos e ingresa fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra."
                 }
@@ -294,17 +297,19 @@ fun TareasScreen(
 ) {
     val uiState = collectHuertoUiState(viewModel)
     val esAdministrador = viewModel.esAdministrador
-    var mostrarFormulario by remember { mutableStateOf(false) }
-    var tareaEnEdicion by remember { mutableStateOf<Tarea?>(null) }
-    var estadoFiltro by remember { mutableStateOf("") }
-    var fechaFiltro by remember { mutableStateOf("") }
-    var responsableFiltro by remember { mutableStateOf("") }
-    var tareaParaRechazar by remember { mutableStateOf<Tarea?>(null) }
-    var motivoRechazo by remember { mutableStateOf("") }
-    var errorMotivoRechazo by remember { mutableStateOf(false) }
+    var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
+    var tareaEnEdicionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val tareaEnEdicion = uiState.tareas.firstOrNull { it.id == tareaEnEdicionId }
+    var estadoFiltro by rememberSaveable { mutableStateOf("") }
+    var fechaFiltro by rememberSaveable { mutableStateOf("") }
+    var responsableFiltro by rememberSaveable { mutableStateOf("") }
+    var tareaParaRechazarId by rememberSaveable { mutableStateOf<String?>(null) }
+    val tareaParaRechazar = uiState.tareas.firstOrNull { it.id == tareaParaRechazarId }
+    var motivoRechazo by rememberSaveable { mutableStateOf("") }
+    var errorMotivoRechazo by rememberSaveable { mutableStateOf(false) }
     var enviandoRechazo by remember { mutableStateOf(false) }
-    var errorOperacionRechazo by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var errorOperacionRechazo by rememberSaveable { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     val tareas = viewModel.tareasVisibles
     val tareasFiltradas = tareas.filter { tarea ->
         (estadoFiltro.isBlank() ||
@@ -321,7 +326,7 @@ fun TareasScreen(
         uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (esAdministrador) {
             Button(onClick = {
-                tareaEnEdicion = null
+                tareaEnEdicionId = null
                 mostrarFormulario = true
             }) { Text("Crear y asignar tarea") }
             uiState.errorCargaUsuarios?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -409,13 +414,13 @@ fun TareasScreen(
                     }
                     if (esAdministrador && !PermisosHuerto.esTareaCompletada(tarea.estado)) {
                         OutlinedButton(onClick = {
-                            tareaEnEdicion = tarea
+                            tareaEnEdicionId = tarea.id
                             mostrarFormulario = true
                         }) { Text("Editar tarea") }
                     }
                     if (esAdministrador && tarea.estado == "Por validar") {
                         OutlinedButton(onClick = {
-                            tareaParaRechazar = tarea
+                            tareaParaRechazarId = tarea.id
                             motivoRechazo = ""
                             errorMotivoRechazo = false
                             errorOperacionRechazo = null
@@ -433,7 +438,7 @@ fun TareasScreen(
             tarea = tareaEnEdicion,
             onDismiss = {
                 mostrarFormulario = false
-                tareaEnEdicion = null
+                tareaEnEdicionId = null
             },
             onSave = { titulo, instrucciones, sectorId, cultivoId, usuarioId, fechaProgramada, tipo ->
                 val guardada = tareaEnEdicion?.let { tarea ->
@@ -446,7 +451,7 @@ fun TareasScreen(
                 if (guardada) {
                     error = null
                     mostrarFormulario = false
-                    tareaEnEdicion = null
+                    tareaEnEdicionId = null
                 } else {
                     error = "Completa los datos, ingresa una fecha válida (AAAA-MM-DD) y selecciona un sector y estudiante."
                 }
@@ -457,7 +462,7 @@ fun TareasScreen(
     tareaParaRechazar?.let { tarea ->
         AlertDialog(
             onDismissRequest = {
-                if (!enviandoRechazo) tareaParaRechazar = null
+                if (!enviandoRechazo) tareaParaRechazarId = null
             },
             title = { Text("Rechazar tarea") },
             text = {
@@ -494,7 +499,7 @@ fun TareasScreen(
                         viewModel.rechazarTarea(tarea.id, motivoRechazo) { resultado ->
                             enviandoRechazo = false
                             if (resultado == null) {
-                                tareaParaRechazar = null
+                                tareaParaRechazarId = null
                                 motivoRechazo = ""
                                 error = null
                             } else {
@@ -508,7 +513,7 @@ fun TareasScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { tareaParaRechazar = null },
+                    onClick = { tareaParaRechazarId = null },
                     enabled = !enviandoRechazo
                 ) { Text("Cancelar") }
             }
@@ -524,14 +529,14 @@ fun DetalleTareaScreen(
 ) {
     val uiState = collectHuertoUiState(viewModel)
     val tarea = viewModel.tareasVisibles.firstOrNull { it.id == tareaId }
-    var mostrarDialogoRechazo by remember { mutableStateOf(false) }
-    var motivoRechazo by remember { mutableStateOf("") }
-    var errorRechazo by remember { mutableStateOf<String?>(null) }
+    var mostrarDialogoRechazo by rememberSaveable { mutableStateOf(false) }
+    var motivoRechazo by rememberSaveable { mutableStateOf("") }
+    var errorRechazo by rememberSaveable { mutableStateOf<String?>(null) }
     var enviandoRechazo by remember { mutableStateOf(false) }
-    var comentarioEntrega by remember(tareaId) { mutableStateOf("") }
-    var imagenEntrega by remember(tareaId) { mutableStateOf<Uri?>(null) }
-    var uriCamaraPendiente by remember(tareaId) { mutableStateOf<Uri?>(null) }
-    var errorEntrega by remember { mutableStateOf<String?>(null) }
+    var comentarioEntrega by rememberSaveable(tareaId) { mutableStateOf("") }
+    var imagenEntrega by rememberSaveable(tareaId) { mutableStateOf<Uri?>(null) }
+    var uriCamaraPendiente by rememberSaveable(tareaId) { mutableStateOf<Uri?>(null) }
+    var errorEntrega by rememberSaveable { mutableStateOf<String?>(null) }
     var enviandoEntrega by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val selectorEvidencia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
@@ -864,10 +869,10 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 @Composable
 fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
-    var sectorFiltro by remember { mutableStateOf("") }
-    var cultivoFiltro by remember { mutableStateOf("") }
-    var desde by remember { mutableStateOf("") }
-    var hasta by remember { mutableStateOf("") }
+    var sectorFiltro by rememberSaveable { mutableStateOf("") }
+    var cultivoFiltro by rememberSaveable { mutableStateOf("") }
+    var desde by rememberSaveable { mutableStateOf("") }
+    var hasta by rememberSaveable { mutableStateOf("") }
     ScreenLayout("Historial de actividades", onBack) {
         CampoSeleccion(
             etiqueta = "Sector",
@@ -1132,10 +1137,10 @@ fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 @Composable
 fun ReportesProblemasScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
-    var mostrarFormulario by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var seguimiento by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var estadoFiltro by remember { mutableStateOf("") }
+    var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var seguimiento by rememberSaveable { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var estadoFiltro by rememberSaveable { mutableStateOf("") }
 
     ScreenLayout(
         if (viewModel.esAdministrador) "Problemas del huerto" else "Mis reportes de problemas",
@@ -1290,13 +1295,13 @@ private fun FormularioReporteProblema(
     onDismiss: () -> Unit,
     onSave: (String, String, String?, String, String, Uri?, (String?) -> Unit) -> Unit
 ) {
-    var descripcion by remember { mutableStateOf("") }
-    var sectorId by remember { mutableStateOf("") }
-    var cultivoId by remember { mutableStateOf("") }
-    var prioridad by remember { mutableStateOf("Media") }
-    var tipoProblema by remember { mutableStateOf("Otro") }
-    var fotografia by remember { mutableStateOf<Uri?>(null) }
-    var mostrarError by remember { mutableStateOf(false) }
+    var descripcion by rememberSaveable { mutableStateOf("") }
+    var sectorId by rememberSaveable { mutableStateOf("") }
+    var cultivoId by rememberSaveable { mutableStateOf("") }
+    var prioridad by rememberSaveable { mutableStateOf("Media") }
+    var tipoProblema by rememberSaveable { mutableStateOf("Otro") }
+    var fotografia by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var mostrarError by rememberSaveable { mutableStateOf(false) }
     var guardando by remember { mutableStateOf(false) }
     val selectorFotografia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
         if (uri != null) fotografia = uri
@@ -1427,17 +1432,17 @@ private fun FormularioSector(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, String, String) -> Boolean
 ) {
-    var nombre by remember(sector?.id) { mutableStateOf(sector?.nombre.orEmpty()) }
-    var ubicacion by remember(sector?.id) { mutableStateOf(sector?.ubicacion.orEmpty()) }
-    var descripcion by remember(sector?.id) { mutableStateOf(sector?.descripcion.orEmpty()) }
-    var estado by remember(sector?.id) { mutableStateOf(sector?.estado ?: "Disponible") }
-    var inicioMantenimiento by remember(sector?.id) {
+    var nombre by rememberSaveable(sector?.id) { mutableStateOf(sector?.nombre.orEmpty()) }
+    var ubicacion by rememberSaveable(sector?.id) { mutableStateOf(sector?.ubicacion.orEmpty()) }
+    var descripcion by rememberSaveable(sector?.id) { mutableStateOf(sector?.descripcion.orEmpty()) }
+    var estado by rememberSaveable(sector?.id) { mutableStateOf(sector?.estado ?: "Disponible") }
+    var inicioMantenimiento by rememberSaveable(sector?.id) {
         mutableStateOf(sector?.fechaInicioMantenimiento.orEmpty())
     }
-    var terminoMantenimiento by remember(sector?.id) {
+    var terminoMantenimiento by rememberSaveable(sector?.id) {
         mutableStateOf(sector?.fechaTerminoMantenimiento.orEmpty())
     }
-    var mostrarError by remember { mutableStateOf(false) }
+    var mostrarError by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (sector == null) "Agregar sector" else "Editar sector") },
@@ -1523,16 +1528,16 @@ private fun FormularioCultivo(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String, String) -> Boolean
 ) {
-    var nombre by remember(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
-    var fechaSiembra by remember(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
-    var fechaCosechaEstimada by remember(cultivo?.id) {
+    var nombre by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
+    var fechaSiembra by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
+    var fechaCosechaEstimada by rememberSaveable(cultivo?.id) {
         mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
     }
-    var estado by remember(cultivo?.id) {
+    var estado by rememberSaveable(cultivo?.id) {
         mutableStateOf(cultivo?.estadoDesarrollo ?: "Planificado")
     }
-    var frecuencia by remember(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
-    var mostrarError by remember { mutableStateOf(false) }
+    var frecuencia by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
+    var mostrarError by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (cultivo == null) "Agregar cultivo" else "Editar cultivo") },
@@ -1608,18 +1613,18 @@ private fun FormularioTarea(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String?, String, String, String) -> Boolean
 ) {
-    var titulo by remember(tarea?.id) { mutableStateOf(tarea?.titulo.orEmpty()) }
-    var instrucciones by remember(tarea?.id) { mutableStateOf(tarea?.descripcion.orEmpty()) }
-    var sectorId by remember(tarea?.id) { mutableStateOf(tarea?.sectorId.orEmpty()) }
-    var cultivoId by remember(tarea?.id) { mutableStateOf(tarea?.cultivoId) }
-    var usuarioId by remember(tarea?.id) { mutableStateOf(tarea?.asignadoA.orEmpty()) }
-    var fechaProgramada by remember(tarea?.id) {
+    var titulo by rememberSaveable(tarea?.id) { mutableStateOf(tarea?.titulo.orEmpty()) }
+    var instrucciones by rememberSaveable(tarea?.id) { mutableStateOf(tarea?.descripcion.orEmpty()) }
+    var sectorId by rememberSaveable(tarea?.id) { mutableStateOf(tarea?.sectorId.orEmpty()) }
+    var cultivoId by rememberSaveable(tarea?.id) { mutableStateOf(tarea?.cultivoId) }
+    var usuarioId by rememberSaveable(tarea?.id) { mutableStateOf(tarea?.asignadoA.orEmpty()) }
+    var fechaProgramada by rememberSaveable(tarea?.id) {
         mutableStateOf(tarea?.fechaProgramada.orEmpty())
     }
-    var tipo by remember(tarea?.id) {
+    var tipo by rememberSaveable(tarea?.id) {
         mutableStateOf(tarea?.tipo ?: TipoTarea.MANTENIMIENTO)
     }
-    var mostrarError by remember { mutableStateOf(false) }
+    var mostrarError by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (tarea == null) "Crear y asignar tarea" else "Editar tarea") },

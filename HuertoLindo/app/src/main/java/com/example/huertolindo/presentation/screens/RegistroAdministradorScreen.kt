@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,14 +40,14 @@ fun RegistroAdministradorScreen(
     onBack: () -> Unit,
     onRegistrationSuccess: () -> Unit
 ) {
-    var nombre by remember { mutableStateOf("") }
-    var apellido by remember { mutableStateOf("") }
-    var correo by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmarPassword by remember { mutableStateOf("") }
-    var intentoRegistro by remember { mutableStateOf(false) }
+    var nombre by rememberSaveable { mutableStateOf("") }
+    var apellido by rememberSaveable { mutableStateOf("") }
+    var correo by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirmarPassword by rememberSaveable { mutableStateOf("") }
+    var intentoRegistro by rememberSaveable { mutableStateOf(false) }
     var cargando by remember { mutableStateOf(false) }
-    var errorServidor by remember { mutableStateOf<String?>(null) }
+    var errorServidor by rememberSaveable { mutableStateOf<String?>(null) }
 
     val validacion = ValidacionRegistro.validar(
         nombre = nombre,
