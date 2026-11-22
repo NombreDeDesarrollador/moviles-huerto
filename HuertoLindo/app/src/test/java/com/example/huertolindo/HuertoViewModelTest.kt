@@ -2,6 +2,7 @@ package com.example.huertolindo
 
 import android.app.Application
 import com.example.huertolindo.domain.model.*
+import com.example.huertolindo.data.local.SessionManager
 import com.example.huertolindo.domain.repository.HuertoRepository
 import com.example.huertolindo.domain.repository.HuertoSnapshot
 import com.example.huertolindo.domain.security.PermisosHuerto
@@ -21,6 +22,7 @@ class HuertoViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val application = mockk<Application>(relaxed = true)
     private val repository = mockk<HuertoRepository>(relaxed = true)
+    private val sessionManager = mockk<SessionManager>(relaxed = true)
 
     private val demoAdmin = Usuario(
         id = "admin-1",
@@ -110,8 +112,6 @@ class HuertoViewModelTest {
         coEvery { repository.cargarSnapshot() } returns snapshot
         coEvery { repository.cargarSnapshot(any()) } returns snapshot
         coEvery { repository.obtenerUsuarios() } returns listOf(demoAdmin, demoEstudiante)
-        coEvery { repository.migrarEvidenciasLegacy(any()) } returns Unit
-        coEvery { repository.migrarHistorialLegacy(any()) } returns Unit
     }
 
     @After
@@ -119,8 +119,14 @@ class HuertoViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun TestScope.crearViewModel(): HuertoViewModel {
-        val vm = HuertoViewModel(application, repository, testDispatcher)
+    private fun TestScope.crearViewModel(sesion: Usuario? = demoAdmin): HuertoViewModel {
+        every { sessionManager.obtenerUsuarioSesion() } returns sesion
+        val vm = HuertoViewModel(
+            application,
+            repository,
+            testDispatcher,
+            sessionManager = sessionManager
+        )
         advanceUntilIdle()
         return vm
     }
@@ -139,31 +145,21 @@ class HuertoViewModelTest {
     }
 
     @Test
-    fun advertenciaDeTareasNoOcultaSectoresYCultivosCargados() = runTest {
-        val advertencia = "El backend rechazó tareas (HTTP 500)."
-        coEvery { repository.cargarSnapshot() } returns HuertoSnapshot(
-            sectores = listOf(demoSector),
-            cultivos = listOf(demoCultivo),
-            tareas = emptyList(),
-            evidencias = emptyList(),
-            validaciones = emptyList(),
-            reportesProblemas = emptyList(),
-            actividades = emptyList(),
-            advertencia = advertencia
-        )
+    fun falloDelBackendNoRellenaDatosDesdeRoom() = runTest {
+        coEvery { repository.cargarSnapshot(any()) } throws java.io.IOException("Backend no disponible")
 
         val viewModel = crearViewModel()
 
-        assertEquals(listOf(demoSector), viewModel.listaSectores.value)
-        assertEquals(listOf(demoCultivo), viewModel.listaCultivos.value)
-        assertEquals(advertencia, viewModel.errorPersistencia)
+        assertTrue(viewModel.listaSectores.value.isEmpty())
+        assertTrue(viewModel.listaCultivos.value.isEmpty())
+        assertEquals("Backend no disponible", viewModel.errorPersistencia)
     }
 
     @Test
     fun inicioDeSesionExitosoActualizaUsuarioActual() = runTest {
         coEvery { repository.autenticar("docente@huertolindo.cl", "HuertoDocente2026!") } returns demoAdmin
 
-        val viewModel = crearViewModel()
+        val viewModel = crearViewModel(null)
         var resultado: HuertoViewModel.ResultadoInicioSesion? = null
 
         viewModel.iniciarSesion("docente@huertolindo.cl", "HuertoDocente2026!") {
@@ -181,7 +177,7 @@ class HuertoViewModelTest {
     fun inicioDeSesionFallidoRetornaCredencialesInvalidas() = runTest {
         coEvery { repository.autenticar("invalido@huertolindo.cl", "wrong") } returns null
 
-        val viewModel = crearViewModel()
+        val viewModel = crearViewModel(null)
         var resultado: HuertoViewModel.ResultadoInicioSesion? = null
 
         viewModel.iniciarSesion("invalido@huertolindo.cl", "wrong") {

@@ -140,7 +140,7 @@ class AuthViewModelTest {
     @Test
     fun registroAdministradorExitosoCuandoActorEsAdmin() = runTest {
         coEvery { repository.autenticar("docente@huertolindo.cl", "HuertoDocente2026!") } returns demoAdmin
-        coEvery { repository.registrarAdministrador(any(), "admin-1") } returns true
+        coEvery { repository.registrarAdministrador(any(), "admin-1", any()) } returns true
 
         val viewModel = crearViewModel()
         viewModel.iniciarSesion("docente@huertolindo.cl", "HuertoDocente2026!") {}
@@ -158,7 +158,13 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertTrue(resultado is AuthViewModel.ResultadoRegistroAdministrador.Exito)
-        coVerify { repository.registrarAdministrador(match { it.correo == "laura@huertolindo.cl" }, "admin-1") }
+        coVerify {
+            repository.registrarAdministrador(
+                match { it.correo == "laura@huertolindo.cl" },
+                "admin-1",
+                "Docente2026!"
+            )
+        }
     }
 
     @Test

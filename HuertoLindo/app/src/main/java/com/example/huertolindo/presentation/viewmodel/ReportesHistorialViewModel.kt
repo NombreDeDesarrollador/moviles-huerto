@@ -48,7 +48,11 @@ class ReportesHistorialViewModel(
                     huertoRepository.inicializar()
                     huertoRepository.cargarSnapshot()
                 }
-                val evidenciasExistentes = snapshot.evidencias.filter { File(it.rutaArchivo).isFile }
+                val evidenciasExistentes = snapshot.evidencias.filter {
+                    it.rutaArchivo.startsWith("http://") ||
+                        it.rutaArchivo.startsWith("https://") ||
+                        File(it.rutaArchivo).isFile
+                }
                 val atrasadas = tareasUseCase.tareasAtrasadas(snapshot.tareas)
                 val proximosRiegos = cultivosUseCase.cultivosConRiegoPendiente(snapshot.cultivos)
 

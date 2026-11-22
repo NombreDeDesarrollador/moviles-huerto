@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.huertolindo.data.remote.RetrofitClient
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.media.eliminarFotografiaTemporal
 import com.example.huertolindo.domain.model.SensorSimulado
@@ -933,6 +934,8 @@ fun ReportesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 @Composable
 fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
+    val context = LocalContext.current
+    val imageLoader = remember(context) { RetrofitClient.imageLoader(context) }
     var sectorFiltro by rememberSaveable { mutableStateOf("") }
     var cultivoFiltro by rememberSaveable { mutableStateOf("") }
     var desde by rememberSaveable { mutableStateOf("") }
@@ -1107,8 +1110,11 @@ fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     Text("Fecha: ${item.fecha}")
                     item.foto?.let { ruta ->
                         AsyncImage(
-                            model = Uri.fromFile(File(ruta)),
+                            model = ruta.takeIf {
+                                it.startsWith("http://") || it.startsWith("https://")
+                            } ?: Uri.fromFile(File(ruta)),
                             contentDescription = "Fotografía del historial",
+                            imageLoader = imageLoader,
                             modifier = Modifier.fillMaxWidth().height(180.dp),
                             contentScale = ContentScale.Crop
                         )
@@ -1161,6 +1167,8 @@ fun CalendarioHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
 @Composable
 fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
+    val context = LocalContext.current
+    val imageLoader = remember(context) { RetrofitClient.imageLoader(context) }
     ScreenLayout("Galería del huerto", onBack) {
         Text("Puedes adjuntar fotografías de cualquier tipo.")
         val tareasVisibles = viewModel.tareasVisibles.map { it.id }.toSet()
@@ -1188,8 +1196,11 @@ fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                 Text(titulo, style = MaterialTheme.typography.titleMedium)
                 Text("Fecha: ${evidencia.fechaRegistro}")
                 AsyncImage(
-                    model = Uri.fromFile(File(evidencia.rutaArchivo)),
+                    model = evidencia.rutaArchivo.takeIf {
+                        it.startsWith("http://") || it.startsWith("https://")
+                    } ?: Uri.fromFile(File(evidencia.rutaArchivo)),
                     contentDescription = "Fotografía del huerto",
+                    imageLoader = imageLoader,
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                     contentScale = ContentScale.Crop
                 )

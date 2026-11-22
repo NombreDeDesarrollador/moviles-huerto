@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.huertolindo.data.remote.RetrofitClient
 import com.example.huertolindo.domain.model.Evidencia
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.media.eliminarFotografiaTemporal
@@ -44,6 +45,7 @@ fun EvidenciaFotograficaSection(
     onEliminarFoto: (Evidencia, (String?) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
+    val imageLoader = remember(context) { RetrofitClient.imageLoader(context) }
     val fotosPendientes = remember { mutableStateListOf<Uri>() }
     var error by remember { mutableStateOf<String?>(null) }
     var uriCamaraPendiente by rememberSaveable { mutableStateOf<String?>(null) }
@@ -116,8 +118,11 @@ fun EvidenciaFotograficaSection(
         evidencias.forEach { evidencia ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AsyncImage(
-                    model = Uri.fromFile(File(evidencia.rutaArchivo)),
+                    model = evidencia.rutaArchivo.takeIf {
+                        it.startsWith("http://") || it.startsWith("https://")
+                    } ?: Uri.fromFile(File(evidencia.rutaArchivo)),
                     contentDescription = "Fotografía adjunta",
+                    imageLoader = imageLoader,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp),

@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.huertolindo.data.local.SessionManager
+import com.example.huertolindo.domain.exception.CorreoYaRegistradoException
 import com.example.huertolindo.domain.model.Usuario
 import com.example.huertolindo.domain.repository.HuertoRepository
 import com.example.huertolindo.domain.security.PermisosHuerto
@@ -65,7 +66,9 @@ class AuthViewModel(
             } catch (e: java.security.GeneralSecurityException) {
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
             } catch (e: Exception) {
-                ResultadoInicioSesion.ErrorDeBaseDeDatos
+                ResultadoInicioSesion.ErrorDelServidor(
+                    e.message ?: "No se pudo completar el inicio de sesión con el servidor."
+                )
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
             }
@@ -96,6 +99,8 @@ class AuthViewModel(
                 ResultadoRegistro.Exito
             } catch (e: SQLiteConstraintException) {
                 ResultadoRegistro.CorreoYaRegistrado
+            } catch (e: CorreoYaRegistradoException) {
+                ResultadoRegistro.CorreoYaRegistrado
             } catch (e: Exception) {
                 ResultadoRegistro.ErrorDeBaseDeDatos
             } finally {
@@ -125,6 +130,8 @@ class AuthViewModel(
                 }
                 if (ok) ResultadoRegistroAdministrador.Exito else ResultadoRegistroAdministrador.NoAutorizado
             } catch (e: SQLiteConstraintException) {
+                ResultadoRegistroAdministrador.CorreoYaRegistrado
+            } catch (e: CorreoYaRegistradoException) {
                 ResultadoRegistroAdministrador.CorreoYaRegistrado
             } catch (e: Exception) {
                 ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
@@ -169,6 +176,7 @@ class AuthViewModel(
         data class Exito(val usuario: Usuario) : ResultadoInicioSesion
         data object CredencialesInvalidas : ResultadoInicioSesion
         data object ErrorDeBaseDeDatos : ResultadoInicioSesion
+        data class ErrorDelServidor(val mensaje: String) : ResultadoInicioSesion
     }
 
     sealed interface ResultadoRegistro {

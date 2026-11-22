@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.huertolindo.data.repository.RoomHuertoRepository
+import com.example.huertolindo.data.repository.ApiHuertoRepository
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.media.eliminarFotografiaTemporal
 import kotlinx.coroutines.runBlocking
@@ -41,7 +41,7 @@ class ExampleInstrumentedTest {
                 assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
             } ?: fail("No se pudo abrir el archivo de prueba.")
 
-            val evidencia = RoomHuertoRepository(context).guardarEvidenciaLocal(
+            val evidencia = ApiHuertoRepository(context).guardarEvidenciaLocal(
                 tareaId = "tarea-prueba",
                 comentario = "Prueba de imagen",
                 imagenUri = uri.toString()

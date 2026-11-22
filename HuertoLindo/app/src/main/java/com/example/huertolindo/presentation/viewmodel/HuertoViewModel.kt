@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Base64
+import com.example.huertolindo.domain.exception.CorreoYaRegistradoException
 import com.example.huertolindo.domain.model.*
 import com.example.huertolindo.domain.repository.HuertoRepository
 import com.example.huertolindo.domain.repository.HuertoSnapshot
@@ -237,7 +238,15 @@ class HuertoViewModel(
     }
 
     private fun cargarDatosPersistentes() {
+        if (_usuarioActual.value == null) {
+            _cargandoDatos.value = false
+            return
+        }
         viewModelScope.launch {
+            if (_usuarioActual.value == null) {
+                _cargandoDatos.value = false
+                return@launch
+            }
             try {
                 val snapshot = withContext(ioDispatcher) {
                     huertoRepository.inicializar()
@@ -245,31 +254,15 @@ class HuertoViewModel(
                         ?: huertoRepository.cargarSnapshot()
                 }
                 aplicarSnapshot(snapshot)
-                _usuariosDisponibles.value = withContext(ioDispatcher) {
-                    huertoRepository.obtenerUsuarios()
-                }
-                try {
-                    withContext(ioDispatcher) {
-                        huertoRepository.migrarEvidenciasLegacy(snapshot.evidencias)
-                        huertoRepository.migrarHistorialLegacy(snapshot.actividades)
-                    }
-                    aplicarSnapshot(
-                        withContext(ioDispatcher) {
-                            _usuarioActual.value?.let { huertoRepository.cargarSnapshot(it) }
-                                ?: huertoRepository.cargarSnapshot()
-                        }
-                    )
-                } catch (exception: SQLiteException) {
-                    android.util.Log.e("HuertoViewModel", "No se pudieron migrar datos locales anteriores.", exception)
-                    _errorPersistencia.value = "No se pudieron migrar algunos datos locales anteriores."
-                } catch (exception: JSONException) {
-                    android.util.Log.e("HuertoViewModel", "El formato de datos locales anteriores es inválido.", exception)
-                    _errorPersistencia.value = "No se pudieron leer algunos datos locales anteriores."
+                _usuariosDisponibles.value = if (PermisosHuerto.esAdministrador(usuarioActual?.perfil)) {
+                    withContext(ioDispatcher) { huertoRepository.obtenerUsuarios() }
+                } else {
+                    emptyList()
                 }
                 _cargandoDatos.value = false
             } catch (exception: SQLiteException) {
-                android.util.Log.e("HuertoViewModel", "No se pudieron cargar los datos locales.", exception)
-                _errorPersistencia.value = "No se pudieron cargar los datos guardados."
+                android.util.Log.e("HuertoViewModel", "No se pudieron preparar los datos migrados.", exception)
+                _errorPersistencia.value = "No se pudieron preparar los datos para su lectura."
                 _cargandoDatos.value = false
             } catch (exception: IllegalStateException) {
                 android.util.Log.e("HuertoViewModel", "No se pudieron cargar los datos del huerto.", exception)
@@ -289,7 +282,7 @@ class HuertoViewModel(
         _listaSectores.value = snapshot.sectores
         _listaCultivos.value = snapshot.cultivos
         _listaTareas.value = snapshot.tareas
-        _evidenciasTareas.value = snapshot.evidencias.filter { File(it.rutaArchivo).isFile }
+        _evidenciasTareas.value = snapshot.evidencias
         _validacionesTareas.value = snapshot.validaciones
         _comentariosEntrega.value = evidenciasTareas.value
             .filter { !it.tareaId.isNullOrBlank() && it.descripcion.isNotBlank() }
@@ -312,8 +305,8 @@ class HuertoViewModel(
                     }
                 )
             } catch (exception: SQLiteException) {
-                android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde Room.", exception)
-                _errorPersistencia.value = "No se pudieron actualizar los datos guardados."
+                android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde la API.", exception)
+                _errorPersistencia.value = "No se pudieron actualizar los datos del servidor."
             } catch (exception: Exception) {
                 android.util.Log.e("HuertoViewModel", "No se pudo actualizar la vista desde el backend.", exception)
                 _errorPersistencia.value = exception.message ?: "No se pudieron actualizar los datos del backend."
@@ -382,7 +375,7 @@ class HuertoViewModel(
                 }
             }
             try {
-                withContext(ioDispatcher) {
+                val evidenciaRemota = withContext(ioDispatcher) {
                     huertoRepository.entregarTarea(
                         tareaEntregada,
                         evidencia,
@@ -390,11 +383,13 @@ class HuertoViewModel(
                         actividad ?: throw IllegalStateException("No se pudo registrar la entrega.")
                     )
                 }
+                _evidenciasTareas.value = evidenciasTareas.value
+                    .filterNot { it.id == evidencia.id } + evidenciaRemota
                 actualizarTarea(tareaEntregada)
             } catch (exception: SQLiteException) {
                 revertirEntregaLocal()
-                android.util.Log.e("HuertoViewModel", "No se pudo guardar la entrega en Room.", exception)
-                _errorPersistencia.value = "No se pudo guardar la entrega en la base de datos."
+                android.util.Log.e("HuertoViewModel", "No se pudo completar la entrega.", exception)
+                _errorPersistencia.value = "No se pudo completar la entrega."
                 onResult(errorPersistencia)
                 return@launch
             } catch (exception: IOException) {
@@ -535,7 +530,7 @@ class HuertoViewModel(
                 android.util.Log.e("HuertoViewModel", "No se pudo eliminar el archivo de evidencia.", exception)
                 onResult("No se pudo quitar la fotografía. Inténtalo nuevamente.")
             } catch (exception: SQLiteException) {
-                android.util.Log.e("HuertoViewModel", "No se pudo eliminar la evidencia de Room.", exception)
+                android.util.Log.e("HuertoViewModel", "No se pudo eliminar la evidencia.", exception)
                 onResult("No se pudo quitar la fotografía de la base de datos.")
             } catch (exception: SecurityException) {
                 android.util.Log.e("HuertoViewModel", "No se pudo acceder al archivo de evidencia.", exception)
@@ -836,7 +831,7 @@ class HuertoViewModel(
                 _errorReportesProblemas.value = "No se pudo guardar el reporte en la base de datos."
                 onResult(errorReportesProblemas)
             } catch (exception: IllegalStateException) {
-                android.util.Log.e("HuertoViewModel", "El reporte no cumple sus relaciones locales.", exception)
+                android.util.Log.e("HuertoViewModel", "No se pudieron validar las relaciones remotas del reporte.", exception)
                 _errorReportesProblemas.value = exception.message ?: "No se pudo guardar el reporte."
                 onResult(errorReportesProblemas)
             }
@@ -1226,6 +1221,11 @@ class HuertoViewModel(
             } catch (exception: IllegalArgumentException) {
                 android.util.Log.e("HuertoViewModel", "Las credenciales guardadas no tienen un formato válido.", exception)
                 ResultadoInicioSesion.ErrorDeBaseDeDatos
+            } catch (exception: Exception) {
+                android.util.Log.e("HuertoViewModel", "No se pudo completar el inicio de sesión o la migración remota.", exception)
+                ResultadoInicioSesion.ErrorDelServidor(
+                    exception.message ?: "No se pudo completar el inicio de sesión o la migración remota."
+                )
             } finally {
                 _isLoading.value = false
             }
@@ -1261,12 +1261,23 @@ class HuertoViewModel(
                 ResultadoRegistro.Exito
             } catch (exception: SQLiteConstraintException) {
                 ResultadoRegistro.CorreoYaRegistrado
+            } catch (exception: CorreoYaRegistradoException) {
+                ResultadoRegistro.CorreoYaRegistrado
             } catch (exception: SQLiteException) {
                 ResultadoRegistro.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
                 ResultadoRegistro.ErrorDeBaseDeDatos
+            } catch (exception: IOException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo registrar la cuenta en el backend.", exception)
+                ResultadoRegistro.ErrorDeBaseDeDatos
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "El backend rechazó el registro de la cuenta.", exception)
+                ResultadoRegistro.ErrorDeBaseDeDatos
             } finally {
                 _isLoading.value = false
+            }
+            if (resultado == ResultadoRegistro.Exito) {
+                _successMessage.value = "Registro exitoso. Ahora puedes iniciar sesión."
             }
             onResult(resultado)
         }
@@ -1300,12 +1311,23 @@ class HuertoViewModel(
                 }
             } catch (exception: SQLiteConstraintException) {
                 ResultadoRegistroAdministrador.CorreoYaRegistrado
+            } catch (exception: CorreoYaRegistradoException) {
+                ResultadoRegistroAdministrador.CorreoYaRegistrado
             } catch (exception: SQLiteException) {
                 ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
             } catch (exception: java.security.GeneralSecurityException) {
                 ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
+            } catch (exception: IOException) {
+                android.util.Log.e("HuertoViewModel", "No se pudo registrar el administrador en el backend.", exception)
+                ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
+            } catch (exception: IllegalStateException) {
+                android.util.Log.e("HuertoViewModel", "El backend rechazó el registro del administrador.", exception)
+                ResultadoRegistroAdministrador.ErrorDeBaseDeDatos
             } finally {
                 _isLoading.value = false
+            }
+            if (resultado == ResultadoRegistroAdministrador.Exito) {
+                _successMessage.value = "Administrador registrado exitosamente."
             }
             onResult(resultado)
         }
@@ -1329,6 +1351,7 @@ class HuertoViewModel(
         data class Exito(val usuario: Usuario) : ResultadoInicioSesion
         data object CredencialesInvalidas : ResultadoInicioSesion
         data object ErrorDeBaseDeDatos : ResultadoInicioSesion
+        data class ErrorDelServidor(val mensaje: String) : ResultadoInicioSesion
     }
 
     sealed interface ResultadoRegistro {

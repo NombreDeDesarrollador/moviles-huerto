@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.huertolindo.data.remote.RetrofitClient
-import com.example.huertolindo.data.repository.RoomHuertoRepository
+import com.example.huertolindo.data.repository.ApiHuertoRepository
 import com.example.huertolindo.presentation.viewmodel.AuthViewModel
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
 import com.example.huertolindo.presentation.viewmodel.ReportesHistorialViewModel
@@ -17,7 +17,7 @@ class HuertoViewModelFactory(
 
     private val repository by lazy {
         RetrofitClient.initialize(application)
-        RoomHuertoRepository(application, RetrofitClient.api)
+        ApiHuertoRepository(application, RetrofitClient.api)
     }
 
     @Suppress("UNCHECKED_CAST")

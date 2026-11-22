@@ -52,6 +52,9 @@ interface UsuarioDao {
 
     @Update
     suspend fun actualizar(usuario: UsuarioEntity)
+
+    @Query("DELETE FROM usuarios")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -73,6 +76,9 @@ interface SectorDao {
 
     @androidx.room.Delete
     suspend fun eliminar(sector: SectorEntity)
+
+    @Query("DELETE FROM sectores")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -94,6 +100,9 @@ interface CultivoDao {
 
     @androidx.room.Delete
     suspend fun eliminar(cultivo: CultivoEntity)
+
+    @Query("DELETE FROM cultivos")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -121,6 +130,9 @@ interface TareaDao {
 
     @androidx.room.Delete
     suspend fun eliminar(tarea: TareaEntity)
+
+    @Query("DELETE FROM tareas")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -136,6 +148,9 @@ interface EvidenciaDao {
 
     @androidx.room.Delete
     suspend fun eliminar(evidencia: EvidenciaEntity)
+
+    @Query("DELETE FROM evidencias")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -148,6 +163,9 @@ interface ValidacionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(validacion: ValidacionEntity)
+
+    @Query("DELETE FROM validaciones")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -157,6 +175,9 @@ interface ActividadTareaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(actividad: ActividadTareaEntity)
+
+    @Query("DELETE FROM actividades_tarea")
+    suspend fun eliminarTodos()
 }
 
 @Dao
@@ -172,6 +193,18 @@ interface ReporteProblemaDao {
 
     @Update
     suspend fun actualizar(reporteProblema: ReporteProblemaEntity)
+
+    @Query("DELETE FROM reporte_problemas")
+    suspend fun eliminarTodos()
+}
+
+@Dao
+interface MigracionDao {
+    @Query("SELECT completada FROM migracion_remota WHERE id = 1")
+    suspend fun estaCompletada(): Boolean?
+
+    @Query("INSERT OR REPLACE INTO migracion_remota (id, completada) VALUES (1, 1)")
+    suspend fun marcarCompletada()
 }
 
 @Database(
@@ -183,9 +216,10 @@ interface ReporteProblemaDao {
         EvidenciaEntity::class,
         ValidacionEntity::class,
         ReporteProblemaEntity::class,
-        ActividadTareaEntity::class
+        ActividadTareaEntity::class,
+        MigracionEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class HuertoDatabase : RoomDatabase() {
@@ -197,7 +231,14 @@ abstract class HuertoDatabase : RoomDatabase() {
     abstract fun validacionDao(): ValidacionDao
     abstract fun reporteProblemaDao(): ReporteProblemaDao
     abstract fun actividadTareaDao(): ActividadTareaDao
+    abstract fun migracionDao(): MigracionDao
 }
+
+@androidx.room.Entity(tableName = "migracion_remota")
+data class MigracionEntity(
+    @androidx.room.PrimaryKey val id: Int = 1,
+    @androidx.room.ColumnInfo(name = "completada") val completada: Boolean
+)
 
 private val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -339,6 +380,15 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS migracion_remota " +
+                "(id INTEGER NOT NULL PRIMARY KEY, completada INTEGER NOT NULL)"
+        )
+    }
+}
+
 object HuertoDatabaseProvider {
     @Volatile
     private var INSTANCE: HuertoDatabase? = null
@@ -356,7 +406,8 @@ object HuertoDatabaseProvider {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
-                    MIGRATION_6_7
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
                 )
                 .build()
             INSTANCE = instance

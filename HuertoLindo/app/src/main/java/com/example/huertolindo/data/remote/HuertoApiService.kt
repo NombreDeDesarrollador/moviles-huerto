@@ -13,8 +13,8 @@ interface HuertoApiService {
     @POST("auth/registro")
     suspend fun registrarEnBackend(@Body request: BackendRegistroRequestDto): Response<BackendUsuarioDto>
 
-    @POST("auth/registro")
-    suspend fun registrar(@Body usuario: UsuarioDto): Response<UsuarioDto>
+    @POST("usuarios")
+    suspend fun registrar(@Body usuario: BackendUsuarioRequestDto): Response<BackendUsuarioDto>
 
     @GET("usuarios")
     suspend fun obtenerUsuariosBackend(): Response<List<BackendUsuarioDto>>
@@ -110,6 +110,17 @@ interface HuertoApiService {
         @Body tarea: BackendTareaRequestDto
     ): Response<BackendTareaDto>
 
+    @POST("tareas/{id}/actividades")
+    suspend fun agregarActividadTarea(
+        @Path("id") id: String,
+        @Body actividad: BackendActividadRequestDto
+    ): Response<BackendActividadDto>
+
+    @GET("tareas/{id}/actividades")
+    suspend fun obtenerActividadesTarea(
+        @Path("id") id: String
+    ): Response<List<BackendActividadDto>>
+
     @PUT("tareas/{id}")
     suspend fun actualizarTarea(@Path("id") id: String, @Body tarea: TareaDto): Response<TareaDto>
 
@@ -132,19 +143,34 @@ interface HuertoApiService {
     @GET("evidencias")
     suspend fun obtenerEvidencias(): Response<List<EvidenciaDto>>
 
+    @GET("evidencias")
+    suspend fun obtenerEvidenciasBackend(
+        @Query("tareaId") tareaId: Long? = null,
+        @Query("cultivoId") cultivoId: Long? = null,
+        @Query("reporteId") reporteId: Long? = null
+    ): Response<List<BackendEvidenciaDto>>
+
     @Multipart
     @POST("evidencias/upload")
     suspend fun subirEvidencia(
         @Part file: MultipartBody.Part,
         @Part("tareaId") tareaId: RequestBody?,
+        @Part("cultivoId") cultivoId: RequestBody?,
+        @Part("reporteId") reporteId: RequestBody?,
         @Part("comentario") comentario: RequestBody?,
-        @Part("tipoAsociacion") tipoAsociacion: RequestBody?,
-        @Part("entidadId") entidadId: RequestBody?
-    ): Response<EvidenciaDto>
+    ): Response<BackendEvidenciaDto>
+
+    @DELETE("evidencias/{id}")
+    suspend fun eliminarEvidencia(@Path("id") id: String): Response<Void>
 
     // Validaciones
     @GET("validaciones")
     suspend fun obtenerValidaciones(): Response<List<ValidacionDto>>
+
+    @GET("validaciones")
+    suspend fun obtenerValidacionesBackend(
+        @Query("tareaId") tareaId: Long? = null
+    ): Response<List<BackendValidacionDto>>
 
     @GET("validaciones/{id}")
     suspend fun obtenerValidacionPorId(@Path("id") id: String): Response<ValidacionDto>
@@ -172,6 +198,20 @@ interface HuertoApiService {
 
     @POST("reportes")
     suspend fun guardarReporte(@Body reporte: ReporteProblemaDto): Response<ReporteProblemaDto>
+
+    @POST("reportes")
+    suspend fun guardarReporteBackend(
+        @Body reporte: BackendReporteRequestDto
+    ): Response<BackendReporteDto>
+
+    @GET("reportes")
+    suspend fun obtenerReportesBackend(): Response<List<BackendReporteDto>>
+
+    @PUT("reportes/{id}")
+    suspend fun actualizarReporteBackend(
+        @Path("id") id: String,
+        @Body reporte: BackendReporteRequestDto
+    ): Response<BackendReporteDto>
 
     @PUT("reportes/{id}")
     suspend fun actualizarReporte(@Path("id") id: String, @Body reporte: ReporteProblemaDto): Response<ReporteProblemaDto>

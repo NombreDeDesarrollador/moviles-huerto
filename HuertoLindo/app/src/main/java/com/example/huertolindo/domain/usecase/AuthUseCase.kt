@@ -61,7 +61,7 @@ class AuthUseCase(
             passwordSalt = PasswordHasher.encodeBase64(salt),
             passwordHash = PasswordHasher.encodeBase64(PasswordHasher.hash(password, salt))
         )
-        return repository.registrarAdministrador(nuevoAdmin, administradorActualId)
+        return repository.registrarAdministrador(nuevoAdmin, administradorActualId, password)
     }
 
     fun obtenerSesionActiva(): Usuario? = sessionManager?.obtenerUsuarioSesion()

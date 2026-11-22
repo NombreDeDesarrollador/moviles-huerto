@@ -6,20 +6,20 @@ import com.example.huertolindo.data.local.CultivoDao
 import com.example.huertolindo.data.local.EvidenciaDao
 import com.example.huertolindo.data.local.HuertoDatabase
 import com.example.huertolindo.data.local.HuertoDatabaseProvider
+import com.example.huertolindo.data.local.MigracionDao
 import com.example.huertolindo.data.local.ReporteProblemaDao
 import com.example.huertolindo.data.local.SectorDao
 import com.example.huertolindo.data.local.TareaDao
 import com.example.huertolindo.data.local.UsuarioDao
 import com.example.huertolindo.data.local.ValidacionDao
-import com.example.huertolindo.data.local.entity.UsuarioEntity
 import com.example.huertolindo.data.remote.HuertoApiService
 import com.example.huertolindo.data.remote.BackendAuthResponseDto
 import com.example.huertolindo.data.remote.BackendSectorDto
 import com.example.huertolindo.data.remote.BackendUsuarioDto
 import com.example.huertolindo.data.remote.LoginRequestDto
-import com.example.huertolindo.data.repository.RoomHuertoRepository
+import com.example.huertolindo.data.repository.ApiHuertoRepository
 import com.example.huertolindo.domain.model.Sector
-import com.example.huertolindo.domain.security.PasswordHasher
+import com.example.huertolindo.domain.model.Usuario
 import com.example.huertolindo.domain.security.PermisosHuerto
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -32,13 +32,14 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class RoomHuertoRepositoryTest {
+class ApiHuertoRepositoryTest {
 
     private val application = mockk<Application>(relaxed = true)
     private val api = mockk<HuertoApiService>(relaxed = true)
@@ -52,8 +53,9 @@ class RoomHuertoRepositoryTest {
     private val validacionDao = mockk<ValidacionDao>(relaxed = true)
     private val reporteDao = mockk<ReporteProblemaDao>(relaxed = true)
     private val actividadDao = mockk<ActividadTareaDao>(relaxed = true)
+    private val migracionDao = mockk<MigracionDao>(relaxed = true)
 
-    private lateinit var repository: RoomHuertoRepository
+    private lateinit var repository: ApiHuertoRepository
 
     @Before
     fun setUp() {
@@ -68,8 +70,10 @@ class RoomHuertoRepositoryTest {
         every { database.validacionDao() } returns validacionDao
         every { database.reporteProblemaDao() } returns reporteDao
         every { database.actividadTareaDao() } returns actividadDao
+        every { database.migracionDao() } returns migracionDao
+        coEvery { migracionDao.estaCompletada() } returns true
 
-        repository = RoomHuertoRepository(application, api)
+        repository = ApiHuertoRepository(application, api)
     }
 
     @After
@@ -78,7 +82,7 @@ class RoomHuertoRepositoryTest {
     }
 
     @Test
-    fun autenticarLlamaAServidorYActualizaBaseLocal() = runTest {
+    fun autenticarLlamaAlServidorSinReplicarEnRoom() = runTest {
         val usuarioDto = BackendAuthResponseDto(
             usuario = BackendUsuarioDto(
                 id = 1L,
@@ -89,52 +93,79 @@ class RoomHuertoRepositoryTest {
             )
         )
         coEvery { api.login(any()) } returns Response.success(usuarioDto)
-        coEvery { usuarioDao.obtenerPorCorreo("docente@huertolindo.cl") } returns null
-        coEvery { usuarioDao.asegurar(any()) } returns Unit
-
         val usuario = repository.autenticar("docente@huertolindo.cl", "HuertoDocente2026!")
 
         assertNotNull(usuario)
         assertEquals("1", usuario?.id)
         assertEquals(PermisosHuerto.ADMINISTRADOR, usuario?.perfil)
         coVerify { api.login(match { it.correo == "docente@huertolindo.cl" }) }
-        coVerify { usuarioDao.asegurar(match { it.id == "1" }) }
+        coVerify(exactly = 0) { usuarioDao.asegurar(any()) }
     }
 
     @Test
-    fun autenticarHaceFallbackALocalCuandoFallaServidor() = runTest {
+    fun autenticarFallaSinUsarUsuariosLocalesCuandoElServidorNoEstaDisponible() = runTest {
         coEvery { api.login(any()) } throws IOException("Error de red simulado")
 
-        val salt = PasswordHasher.createSalt()
-        val saltB64 = PasswordHasher.encodeBase64(salt)
-        val hash = PasswordHasher.hash("Pass123!", salt)
-        val hashB64 = PasswordHasher.encodeBase64(hash)
+        val error = runCatching {
+            repository.autenticar("estudiante1@huertolindo.cl", "Pass123!")
+        }.exceptionOrNull()
 
-        val localUserValid = UsuarioEntity(
-            id = "usr-offline",
-            nombre = "Estudiante",
-            apellido = "Local",
-            correo = "estudiante1@huertolindo.cl",
-            perfil = "estudiante",
-            tallerAsignado = "Taller A",
-            passwordSalt = saltB64,
-            passwordHash = hashB64
-        )
-        coEvery { usuarioDao.obtenerPorCorreo("estudiante1@huertolindo.cl") } returns localUserValid
-
-        val usuario = repository.autenticar("estudiante1@huertolindo.cl", "Pass123!")
-
-        assertNotNull(usuario)
-        assertEquals("usr-offline", usuario?.id)
+        assertTrue(error is IOException)
+        coVerify(exactly = 0) { usuarioDao.obtenerPorCorreo(any()) }
     }
 
     @Test
-    fun guardarSectorPersisteEnServidorYRoom() = runTest {
+    fun obtenerUsuariosFallaSinFallbackLocal() = runTest {
+        coEvery { api.obtenerUsuariosBackend() } throws IOException("Sin conexión")
+
+        val error = runCatching { repository.obtenerUsuarios() }.exceptionOrNull()
+
+        assertTrue(error is IOException)
+        coVerify(exactly = 0) { usuarioDao.obtenerTodos() }
+    }
+
+    @Test
+    fun migracionFallidaNoBorraNiMarcaDatosLocales() = runTest {
+        coEvery { api.login(any()) } returns Response.success(
+            BackendAuthResponseDto(
+                BackendUsuarioDto(1, "Docente", "docente@huertolindo.cl", "ADMIN", true)
+            )
+        )
+        coEvery { migracionDao.estaCompletada() } returns false
+        coEvery { usuarioDao.obtenerTodos() } returns emptyList()
+        coEvery { sectorDao.obtenerTodos() } returns listOf(
+            com.example.huertolindo.data.local.entity.SectorEntity(
+                id = "local-sector",
+                nombre = "Sector real",
+                descripcion = "Existente",
+                estado = "En uso",
+                ubicacion = "Patio"
+            )
+        )
+        coEvery { cultivoDao.obtenerTodos() } returns emptyList()
+        coEvery { tareaDao.obtenerTodos() } returns emptyList()
+        coEvery { reporteDao.obtenerTodos() } returns emptyList()
+        coEvery { evidenciaDao.obtenerTodos() } returns emptyList()
+        coEvery { validacionDao.obtenerTodos() } returns emptyList()
+        coEvery { actividadDao.obtenerTodos() } returns emptyList()
+        coEvery { api.obtenerUsuariosBackend() } throws IOException("Backend fuera de línea")
+
+        val usuario = repository.autenticar("docente@huertolindo.cl", "password")
+
+        assertNotNull(usuario)
+        assertEquals("1", usuario?.id)
+        coVerify(exactly = 0) { migracionDao.marcarCompletada() }
+        coVerify(exactly = 0) { sectorDao.eliminarTodos() }
+        coVerify(exactly = 0) { usuarioDao.eliminarTodos() }
+    }
+
+    @Test
+    fun guardarSectorUsaLaRespuestaRemotaSinGuardarEnRoom() = runTest {
         val sector = Sector(
             id = "sec-1",
             nombre = "Sector Hortalizas",
             descripcion = "Zona de prueba",
-            estado = "Disponible",
+            estado = "En uso",
             ubicacion = "Norte"
         )
         coEvery { api.guardarSectorBackend(any()) } returns Response.success(
@@ -145,13 +176,11 @@ class RoomHuertoRepositoryTest {
                 ubicacion = "Norte"
             )
         )
-        coEvery { sectorDao.insertar(any()) } returns Unit
-
         val guardado = repository.guardarSector(sector)
 
         assertEquals("15", guardado.id)
         coVerify { api.guardarSectorBackend(match { it.nombre == "Sector Hortalizas" }) }
-        coVerify { sectorDao.insertar(match { it.id == "15" }) }
+        coVerify(exactly = 0) { sectorDao.insertar(any()) }
     }
 
     @Test
@@ -160,7 +189,7 @@ class RoomHuertoRepositoryTest {
             id = "sec-offline",
             nombre = "Sector Offline",
             descripcion = "Sin red",
-            estado = "Disponible",
+            estado = "En uso",
             ubicacion = "Sur"
         )
         coEvery { api.guardarSectorBackend(any()) } throws IOException("Sin conexion")
@@ -172,18 +201,52 @@ class RoomHuertoRepositoryTest {
     }
 
     @Test
-    fun eliminarSectorEliminaEnServidorYLocal() = runTest {
+    fun guardarSectorRechazaCamposQueLaApiNoPuedePersistir() = runTest {
+        val sector = Sector(
+            id = "sec-1",
+            nombre = "Sector Disponible",
+            descripcion = "Falta soporte del estado",
+            estado = "Disponible",
+            ubicacion = "Sur"
+        )
+
+        val error = runCatching { repository.guardarSector(sector) }.exceptionOrNull()
+
+        assertTrue(error is IOException)
+        coVerify(exactly = 0) { api.guardarSectorBackend(any()) }
+        coVerify(exactly = 0) { sectorDao.insertar(any()) }
+    }
+
+    @Test
+    fun registrarUsuarioNoAparentaExitoSinBackendConfigurado() = runTest {
+        val repositorySinBackend = ApiHuertoRepository(application, null)
+        val usuario = Usuario(
+            id = "usr-1",
+            nombre = "Estudiante",
+            correo = "estudiante@huertolindo.cl",
+            perfil = PermisosHuerto.ESTUDIANTE,
+            tallerAsignado = "Taller Verde"
+        )
+
+        val error = runCatching {
+            repositorySinBackend.registrarUsuario(usuario, "Password123!")
+        }.exceptionOrNull()
+
+        assertTrue(error is IOException)
+        coVerify(exactly = 0) { usuarioDao.insertar(any()) }
+    }
+
+    @Test
+    fun eliminarSectorSoloSolicitaEliminacionRemota() = runTest {
         val sector = Sector("sec-del", "Borrar", "Desc", "Disponible", "Sur")
         val voidResponse = mockk<Response<Void>>(relaxed = true) {
             every { isSuccessful } returns true
         }
         coEvery { api.eliminarSector("sec-del") } returns voidResponse
-        coEvery { sectorDao.eliminar(any()) } returns Unit
-
         repository.eliminarSector(sector)
 
         coVerify { api.eliminarSector("sec-del") }
-        coVerify { sectorDao.eliminar(match { it.id == "sec-del" }) }
+        coVerify(exactly = 0) { sectorDao.eliminar(any()) }
     }
 
 }

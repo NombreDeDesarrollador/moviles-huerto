@@ -2,6 +2,8 @@ package com.example.huertolindo.data.remote
 
 import android.content.Context
 import android.content.SharedPreferences
+import coil3.ImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import okhttp3.OkHttpClient
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -42,6 +44,28 @@ object RetrofitClient {
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
+
+    private val imageLoader by lazy {
+        val context = applicationContext
+            ?: throw IllegalStateException("RetrofitClient debe inicializarse con el contexto de la aplicación.")
+        ImageLoader.Builder(context)
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
+            }
+            .build()
+    }
+
+    fun imageLoader(context: Context): ImageLoader {
+        initialize(context)
+        return imageLoader
+    }
+
+    fun mediaUrl(path: String): String =
+        if (path.startsWith("http://") || path.startsWith("https://")) {
+            path
+        } else {
+            BASE_URL.removeSuffix("api/") + path.trimStart('/')
+        }
 
     fun clearSessionCookies() {
         if (cookieJarDelegate.isInitialized()) {

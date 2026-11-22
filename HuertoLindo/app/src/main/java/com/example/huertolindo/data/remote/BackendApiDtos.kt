@@ -2,6 +2,9 @@ package com.example.huertolindo.data.remote
 
 import com.google.gson.annotations.SerializedName
 import com.example.huertolindo.domain.model.Cultivo
+import com.example.huertolindo.domain.model.ActividadTarea
+import com.example.huertolindo.domain.model.Evidencia
+import com.example.huertolindo.domain.model.ReporteProblema
 import com.example.huertolindo.domain.model.Sector
 import com.example.huertolindo.domain.model.Tarea
 import com.example.huertolindo.domain.model.Usuario
@@ -25,6 +28,14 @@ data class BackendRegistroRequestDto(
     @SerializedName("nombre") val nombre: String,
     @SerializedName("correo") val correo: String,
     @SerializedName("password") val password: String
+)
+
+data class BackendUsuarioRequestDto(
+    @SerializedName("nombre") val nombre: String,
+    @SerializedName("correo") val correo: String,
+    @SerializedName("password") val password: String,
+    @SerializedName("rol") val rol: String,
+    @SerializedName("activo") val activo: Boolean
 )
 
 data class BackendSectorDto(
@@ -99,6 +110,96 @@ data class BackendValidacionDto(
     @SerializedName("validadorNombre") val validadorNombre: String,
     @SerializedName("tareaId") val tareaId: Long?,
     @SerializedName("evidenciaId") val evidenciaId: Long?
+)
+
+data class BackendActividadDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("descripcion") val descripcion: String,
+    @SerializedName("fechaRegistro") val fechaRegistro: String,
+    @SerializedName("tareaId") val tareaId: Long,
+    @SerializedName("usuarioId") val usuarioId: Long,
+    @SerializedName("usuarioNombre") val usuarioNombre: String
+)
+
+data class BackendEvidenciaDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("rutaImagen") val rutaImagen: String,
+    @SerializedName("comentario") val comentario: String?,
+    @SerializedName("fechaSubida") val fechaSubida: String,
+    @SerializedName("tareaId") val tareaId: Long?,
+    @SerializedName("usuarioId") val usuarioId: Long,
+    @SerializedName("usuarioNombre") val usuarioNombre: String,
+    @SerializedName("cultivoId") val cultivoId: Long?,
+    @SerializedName("reporteId") val reporteId: Long?
+)
+
+data class BackendReporteDto(
+    @SerializedName("id") val id: Long,
+    @SerializedName("titulo") val titulo: String,
+    @SerializedName("descripcion") val descripcion: String,
+    @SerializedName("gravedad") val gravedad: String,
+    @SerializedName("resuelto") val resuelto: Boolean,
+    @SerializedName("fechaReporte") val fechaReporte: String,
+    @SerializedName("cultivoId") val cultivoId: Long,
+    @SerializedName("cultivoNombre") val cultivoNombre: String,
+    @SerializedName("usuarioId") val usuarioId: Long,
+    @SerializedName("usuarioNombre") val usuarioNombre: String
+)
+
+data class BackendReporteRequestDto(
+    @SerializedName("titulo") val titulo: String,
+    @SerializedName("descripcion") val descripcion: String,
+    @SerializedName("gravedad") val gravedad: String,
+    @SerializedName("cultivoId") val cultivoId: Long,
+    @SerializedName("usuarioId") val usuarioId: Long
+)
+
+data class BackendActividadRequestDto(
+    @SerializedName("descripcion") val descripcion: String
+)
+
+fun BackendActividadDto.toDomain(tarea: Tarea): ActividadTarea = ActividadTarea(
+    id = id.toString(),
+    tareaId = tareaId.toString(),
+    tituloTarea = tarea.titulo,
+    usuarioRelacionadoId = tarea.asignadoA,
+    usuarioId = usuarioId.toString(),
+    nombreUsuario = usuarioNombre,
+    accion = descripcion,
+    estado = tarea.estado,
+    fecha = fechaRegistro
+)
+
+fun BackendEvidenciaDto.toDomain(): Evidencia = Evidencia(
+    id = id.toString(),
+    tareaId = tareaId?.toString(),
+    cultivoId = cultivoId?.toString(),
+    reporteId = reporteId?.toString(),
+    tipo = "foto",
+    rutaArchivo = RetrofitClient.mediaUrl(rutaImagen),
+    descripcion = comentario.orEmpty(),
+    fechaRegistro = fechaSubida
+)
+
+fun BackendValidacionDto.toDomain(tareaId: String): Validacion = Validacion(
+    id = id.toString(),
+    tareaId = (this.tareaId ?: tareaId.toLongOrNull())?.toString().orEmpty(),
+    administradorId = validadorId.toString(),
+    resultado = if (aprobado) "Validada" else "Rechazada",
+    observaciones = observacion.orEmpty(),
+    fechaValidacion = fechaValidacion
+)
+
+fun BackendReporteDto.toDomain(cultivo: Cultivo): ReporteProblema = ReporteProblema(
+    id = id.toString(),
+    sectorId = cultivo.sectorId,
+    cultivoId = cultivoId.toString(),
+    usuarioId = usuarioId.toString(),
+    descripcion = descripcion,
+    prioridad = gravedad,
+    estado = if (resuelto) "Cerrado" else "Informado",
+    fechaReporte = fechaReporte,
+    tipoProblema = titulo
 )
 
 fun BackendUsuarioDto.toDomain(): Usuario = Usuario(
@@ -188,6 +289,17 @@ fun Validacion.toBackendRequest(): BackendValidacionRequestDto = BackendValidaci
         ?: throw IllegalArgumentException("La tarea no existe en el backend."),
     evidenciaId = null
 )
+
+fun ReporteProblema.toBackendRequest(cultivoId: String? = this.cultivoId): BackendReporteRequestDto =
+    BackendReporteRequestDto(
+        titulo = tipoProblema,
+        descripcion = descripcion,
+        gravedad = prioridad,
+        cultivoId = cultivoId?.toLongOrNull()
+            ?: throw IllegalArgumentException("El reporte debe asociarse a un cultivo existente en el backend."),
+        usuarioId = usuarioId.toLongOrNull()
+            ?: throw IllegalArgumentException("El usuario del reporte no existe en el backend.")
+    )
 
 private fun String.toEstadoTareaHuerto(): String = when (trim().uppercase(Locale.ROOT)) {
     "PENDIENTE" -> "Pendiente"

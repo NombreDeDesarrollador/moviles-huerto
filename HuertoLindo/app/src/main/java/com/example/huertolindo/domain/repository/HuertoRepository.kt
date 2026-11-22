@@ -26,9 +26,8 @@ interface HuertoRepository {
     suspend fun inicializar()
     suspend fun obtenerUsuarios(): List<Usuario>
     suspend fun autenticar(correo: String, password: String): Usuario?
-    suspend fun registrarUsuario(usuario: Usuario)
-    suspend fun registrarUsuario(usuario: Usuario, password: String) = registrarUsuario(usuario)
-    suspend fun registrarAdministrador(usuario: Usuario, administradorId: String): Boolean
+    suspend fun registrarUsuario(usuario: Usuario, password: String)
+    suspend fun registrarAdministrador(usuario: Usuario, administradorId: String, password: String): Boolean
     suspend fun cargarSnapshot(): HuertoSnapshot
     suspend fun cargarSnapshot(usuarioActual: Usuario): HuertoSnapshot = cargarSnapshot()
     suspend fun guardarSector(sector: Sector): Sector
@@ -57,14 +56,13 @@ interface HuertoRepository {
         evidencia: Evidencia,
         estudiante: Usuario,
         actividad: ActividadTarea
-    )
+    ): Evidencia
     suspend fun validarTarea(
         tarea: Tarea,
         validacion: Validacion,
         actividad: ActividadTarea,
         administrador: Usuario
     )
-    suspend fun migrarActividad(actividad: ActividadTarea, actor: Usuario)
     suspend fun insertarReporte(
         reporte: ReporteProblema,
         sector: Sector,
@@ -82,7 +80,4 @@ interface HuertoRepository {
     ): Evidencia
     suspend fun eliminarEvidencia(evidencia: Evidencia)
     fun eliminarArchivoEvidencia(rutaArchivo: String): Boolean
-    suspend fun migrarEvidenciasLegacy(evidenciasExistentes: List<Evidencia>)
-    suspend fun migrarHistorialLegacy(actividadesExistentes: List<ActividadTarea>)
-
 }

@@ -22,8 +22,7 @@ import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
 fun LoginScreen(
     viewModel: HuertoViewModel,
     onLoginSuccess: () -> Unit,
-    onRegisterClick: () -> Unit,
-    mensajeInformativo: String? = null
+    onRegisterClick: () -> Unit
 ) {
     val uiState = collectHuertoUiState(viewModel)
     var correo by rememberSaveable { mutableStateOf("") }
@@ -54,20 +53,11 @@ fun LoginScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text("Preparando los datos locales...")
+                Text("Conectando con el servidor...")
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        mensajeInformativo?.let { mensaje ->
-            Text(
-                text = mensaje,
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
 
         OutlinedTextField(
             value = correo,
@@ -113,41 +103,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Cuentas de prueba")
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            TextButton(
-                onClick = {
-                    correo = "docente@huertolindo.cl"
-                    password = "HuertoDocente2026!"
-                    mensajeError = null
-                }
-            ) { Text("Docente Backend") }
-            TextButton(
-                onClick = {
-                    correo = "estudiante1@huertolindo.cl"
-                    password = "HuertoEstudiante2026!"
-                    mensajeError = null
-                }
-            ) { Text("Estudiante Backend") }
-        }
-        TextButton(
-            onClick = {
-                correo = "docente@huertolindo.test"
-                password = "HuertoDocente2026!"
-                mensajeError = null
-            }
-        ) { Text("Usar cuenta docente local") }
-        TextButton(
-            onClick = {
-                correo = "estudiante@huertolindo.test"
-                password = "HuertoEstudiante2026!"
-                mensajeError = null
-            }
-        ) { Text("Usar cuenta estudiante local") }
-
         Button(
             onClick = {
                 if (correo.isBlank() || password.isBlank()) {
@@ -163,7 +118,9 @@ fun LoginScreen(
                             HuertoViewModel.ResultadoInicioSesion.CredencialesInvalidas ->
                                 mensajeError = "El correo o la contraseña no son correctos."
                             HuertoViewModel.ResultadoInicioSesion.ErrorDeBaseDeDatos ->
-                                mensajeError = "No se pudo acceder a la base de datos local."
+                                mensajeError = "No se pudo acceder a los datos del dispositivo."
+                            is HuertoViewModel.ResultadoInicioSesion.ErrorDelServidor ->
+                                mensajeError = resultado.mensaje
                         }
                     }
                 }

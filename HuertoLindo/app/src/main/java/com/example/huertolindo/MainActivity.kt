@@ -1,6 +1,7 @@
 package com.example.huertolindo
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,11 +40,16 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val huertoState by huertoViewModel.uiState.collectAsState()
+                    LaunchedEffect(huertoState.successMessage) {
+                        huertoState.successMessage?.let { message ->
+                            Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                            huertoViewModel.limpiarExito()
+                        }
+                    }
                     var pantallaActual by rememberSaveable { mutableStateOf("login") }
                     var historialPantallas by rememberSaveable {
                         mutableStateOf(listOf("login"))
                     }
-                    var mensajeRegistro by rememberSaveable { mutableStateOf<String?>(null) }
                     var sectorSeleccionado by rememberSaveable { mutableStateOf("") }
                     var cultivoSeleccionado by rememberSaveable { mutableStateOf("") }
                     var tareaSeleccionada by rememberSaveable { mutableStateOf("") }
@@ -107,11 +113,7 @@ class MainActivity : ComponentActivity() {
                                 "login" -> {
                                     LoginScreen(
                                         viewModel = huertoViewModel,
-                                        mensajeInformativo = mensajeRegistro,
-                                        onRegisterClick = {
-                                            mensajeRegistro = null
-                                            navegarA("registro")
-                                        },
+                                        onRegisterClick = { navegarA("registro") },
                                         onLoginSuccess = {
                                             huertoViewModel.cargarReportesProblema()
                                             huertoViewModel.cargarUsuariosDisponibles()
@@ -123,10 +125,7 @@ class MainActivity : ComponentActivity() {
                                     RegistroScreen(
                                         viewModel = huertoViewModel,
                                         onBackToLogin = { volverPantalla() },
-                                        onRegistrationSuccess = {
-                                            mensajeRegistro = "Cuenta creada exitosamente. Ahora puedes iniciar sesión."
-                                            reemplazarPantalla("login")
-                                        }
+                                        onRegistrationSuccess = { reemplazarPantalla("login") }
                                     )
                                 }
                                 "menu" -> {
@@ -165,7 +164,6 @@ class MainActivity : ComponentActivity() {
                                         onVolver = { volverPantalla() },
                                         onCerrarSesion = {
                                             huertoViewModel.cerrarSesion()
-                                            mensajeRegistro = null
                                             reemplazarPantalla("login")
                                         }
                                     )

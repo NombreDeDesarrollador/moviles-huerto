@@ -221,7 +221,7 @@ class TareasViewModelTest {
             fechaRegistro = "2026-10-15"
         )
         coEvery { repository.guardarEvidenciaLocal(any(), any(), any()) } returns mockEvidencia
-        coEvery { repository.entregarTarea(any(), any(), any(), any()) } returns Unit
+        coEvery { repository.entregarTarea(any(), any(), any(), any()) } returns mockEvidencia
 
         val viewModel = crearViewModel()
         var errorResultado: String? = "inicial"
