@@ -64,13 +64,13 @@ class HuertoViewModel(
     private val _listaSectores = MutableStateFlow<List<Sector>>(emptyList())
     val listaSectores = _listaSectores.asStateFlow()
 
-    private val _listaCultivos = MutableStateFlow<List<Cultivo>>(emptyList())
+    internal val _listaCultivos = MutableStateFlow<List<Cultivo>>(emptyList())
     val listaCultivos = _listaCultivos.asStateFlow()
 
-    private val _listaTareas = MutableStateFlow<List<Tarea>>(emptyList())
+    internal val _listaTareas = MutableStateFlow<List<Tarea>>(emptyList())
     private val listaTareas = _listaTareas.asStateFlow()
 
-    private val _historialActividades = MutableStateFlow<List<ActividadTarea>>(emptyList())
+    internal val _historialActividades = MutableStateFlow<List<ActividadTarea>>(emptyList())
     val historialActividades = _historialActividades.asStateFlow()
 
     private val _evidenciasTareas = MutableStateFlow<List<Evidencia>>(emptyList())
@@ -82,7 +82,7 @@ class HuertoViewModel(
     private val _comentariosEntrega = MutableStateFlow<Map<String, String>>(emptyMap())
     val comentariosEntrega = _comentariosEntrega.asStateFlow()
 
-    private val _reportesProblemas = MutableStateFlow<List<ReporteProblema>>(emptyList())
+    internal val _reportesProblemas = MutableStateFlow<List<ReporteProblema>>(emptyList())
     val reportesProblemas = _reportesProblemas.asStateFlow()
 
     private val _cargandoReportesProblemas = MutableStateFlow(false)
