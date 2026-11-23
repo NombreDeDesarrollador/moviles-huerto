@@ -55,6 +55,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.huertolindo.presentation.components.HuertoImagen
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.media.eliminarFotografiaTemporal
 import com.example.huertolindo.domain.model.SensorSimulado
@@ -808,13 +809,11 @@ fun DetalleTareaScreen(
                 }) { Text("Tomar foto") }
             }
             imagenEntrega?.let { uri ->
-                AsyncImage(
-                    model = uri,
+                HuertoImagen(
+                    modelo = uri,
                     contentDescription = "Vista previa de la evidencia",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    contentScale = ContentScale.Crop
+                    modifier = Modifier.fillMaxWidth(),
+                    altura = 220.dp
                 )
                 TextButton(onClick = {
                     mostrarDialogoQuitarBorrador = true
@@ -1178,11 +1177,11 @@ fun HistorialActividadesScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                     HuertoStatusChip(item.estado)
                     Text("Fecha: ${item.fecha}")
                     item.foto?.let { ruta ->
-                        AsyncImage(
-                            model = Uri.fromFile(File(ruta)),
+                        HuertoImagen(
+                            modelo = ruta,
                             contentDescription = "Fotografía del historial",
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
-                            contentScale = ContentScale.Crop
+                            modifier = Modifier.fillMaxWidth(),
+                            altura = 180.dp
                         )
                     }
                 }
@@ -1259,11 +1258,11 @@ fun GaleriaHuertoScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(titulo, style = MaterialTheme.typography.titleMedium)
                 Text("Fecha: ${evidencia.fechaRegistro}")
-                AsyncImage(
-                    model = Uri.fromFile(File(evidencia.rutaArchivo)),
+                HuertoImagen(
+                    modelo = evidencia.rutaArchivo,
                     contentDescription = "Fotografía del huerto",
-                    modifier = Modifier.fillMaxWidth().height(220.dp),
-                    contentScale = ContentScale.Crop
+                    modifier = Modifier.fillMaxWidth(),
+                    altura = 220.dp
                 )
             }
         }
@@ -1504,11 +1503,11 @@ private fun FormularioReporteProblema(
                     )
                 }
                 fotografia?.let { uri ->
-                    AsyncImage(
-                        model = uri,
+                    HuertoImagen(
+                        modelo = uri,
                         contentDescription = "Vista previa de fotografía del problema",
-                        modifier = Modifier.fillMaxWidth().height(160.dp),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxWidth(),
+                        altura = 160.dp
                     )
                 }
                 Text("Se aceptan fotografías de cualquier tipo.")

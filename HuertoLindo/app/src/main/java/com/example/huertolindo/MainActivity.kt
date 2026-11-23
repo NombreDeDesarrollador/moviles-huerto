@@ -142,7 +142,6 @@ class MainActivity : ComponentActivity() {
                                             onProblemsClick = { navegarA("problemas") },
                                             onHistoryClick = { navegarA("historial") },
                                             onAdministratorsClick = { navegarA("administradores") },
-                                            onCalendarClick = { navegarA("calendario") },
                                             onGalleryClick = { navegarA("galeria") }
                                         )
                                     } else {
@@ -154,7 +153,6 @@ class MainActivity : ComponentActivity() {
                                             onSensorsClick = { navegarA("sensores") },
                                             onProblemsClick = { navegarA("problemas") },
                                             onHistoryClick = { navegarA("historial") },
-                                            onCalendarClick = { navegarA("calendario") },
                                             onGalleryClick = { navegarA("galeria") }
                                         )
                                     }

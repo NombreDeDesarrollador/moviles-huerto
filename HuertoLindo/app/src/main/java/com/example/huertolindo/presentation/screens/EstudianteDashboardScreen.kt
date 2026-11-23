@@ -32,7 +32,6 @@ fun EstudianteDashboardScreen(
     onSensorsClick: () -> Unit = {},
     onProblemsClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
-    onCalendarClick: () -> Unit = {},
     onGalleryClick: () -> Unit = {}
 ) {
     val uiState = collectHuertoUiState(viewModel)
@@ -300,7 +299,6 @@ fun EstudianteDashboardScreen(
                 DashboardActionItem("Explorar Sectores", "🌱", "Solo lectura", null, null, null, onSectorsClick),
                 DashboardActionItem("Sensores", "🌡️", "Simulación académica", null, null, null, onSensorsClick),
                 DashboardActionItem("Historial", "📋", "Mis actividades", null, null, null, onHistoryClick),
-                DashboardActionItem("Calendario", "🗓️", "Fechas clave", null, null, null, onCalendarClick),
                 DashboardActionItem("Galería", "🖼️", "Evidencias", null, null, null, onGalleryClick)
             )
         )

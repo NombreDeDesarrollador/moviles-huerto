@@ -31,6 +31,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.huertolindo.data.remote.RetrofitClient
 import com.example.huertolindo.domain.model.Evidencia
+import com.example.huertolindo.presentation.components.HuertoImagen
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.media.eliminarFotografiaTemporal
 import java.io.File
@@ -119,35 +120,11 @@ fun EvidenciaFotograficaSection(
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         evidencias.forEach { evidencia ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val imageModel: Any = remember(evidencia.rutaArchivo) {
-                    when {
-                        evidencia.rutaArchivo.startsWith("http://") || evidencia.rutaArchivo.startsWith("https://") ->
-                            evidencia.rutaArchivo
-                        evidencia.rutaArchivo.startsWith("/") ->
-                            "${RetrofitClient.SERVER_URL}${evidencia.rutaArchivo}"
-                        else -> {
-                            val archivo = File(evidencia.rutaArchivo)
-                            if (archivo.exists()) Uri.fromFile(archivo) else evidencia.rutaArchivo
-                        }
-                    }
-                }
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageModel)
-                        .crossfade(true)
-                        .build(),
+                HuertoImagen(
+                    modelo = evidencia.rutaArchivo,
                     contentDescription = "Fotografía adjunta",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentScale = ContentScale.Crop,
-                    onError = { state ->
-                        android.util.Log.e(
-                            "EvidenciaFotografica",
-                            "Error al cargar fotografía ($imageModel): ${state.result.throwable.message}",
-                            state.result.throwable
-                        )
-                    }
+                    modifier = Modifier.fillMaxWidth(),
+                    altura = 200.dp
                 )
                 Text("Adjuntada: ${evidencia.fechaRegistro}")
                 if (puedeEliminar) {
@@ -163,13 +140,11 @@ fun EvidenciaFotograficaSection(
         }
         fotosPendientes.forEach { uri ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AsyncImage(
-                    model = uri,
+                HuertoImagen(
+                    modelo = uri,
                     contentDescription = "Vista previa de la fotografía",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentScale = ContentScale.Crop
+                    modifier = Modifier.fillMaxWidth(),
+                    altura = 200.dp
                 )
                 Text("Guardando fotografía…")
             }

@@ -78,13 +78,12 @@ fun FotoScreen(
             style = MaterialTheme.typography.headlineMedium
         )
 
-        AsyncImage(
-            model = fotoPerfil,
+        HuertoImagen(
+            modelo = fotoPerfil,
             contentDescription = "Foto de perfil de $nombreUsuario",
-            modifier = Modifier
-                .size(160.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
+            modifier = Modifier.size(160.dp),
+            altura = 160.dp,
+            forma = CircleShape
         )
 
         Button(

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.example.huertolindo.presentation.components.HuertoImagen
 import com.example.huertolindo.domain.security.PermisosHuerto
 import com.example.huertolindo.presentation.media.crearUriFotografia
 import com.example.huertolindo.presentation.viewmodel.HuertoViewModel
@@ -102,11 +103,12 @@ fun PerfilUsuarioScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (fotoPerfil != null) {
-                    AsyncImage(
-                        model = fotoPerfil,
+                    HuertoImagen(
+                        modelo = fotoPerfil,
                         contentDescription = "Foto de perfil",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        altura = 140.dp,
+                        forma = CircleShape
                     )
                 } else {
                     Text(

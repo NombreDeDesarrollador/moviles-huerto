@@ -39,7 +39,6 @@ fun AdminDashboardScreen(
     onProblemsClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
     onAdministratorsClick: () -> Unit = {},
-    onCalendarClick: () -> Unit = {},
     onGalleryClick: () -> Unit = {}
 ) {
     val uiState = collectHuertoUiState(viewModel)
@@ -309,7 +308,6 @@ fun AdminDashboardScreen(
                 DashboardActionItem("Problemas", "🪲", "Alertas y plagas", uiState.reportesProblemas.size.takeIf { it > 0 }, null, null, onProblemsClick),
                 DashboardActionItem("Reportes", "📊", "Métricas y resumen", null, null, null, onReportsClick),
                 DashboardActionItem("Administradores", "👥", "Nuevo docente", null, null, null, onAdministratorsClick),
-                DashboardActionItem("Calendario", "🗓️", "Cronograma", null, null, null, onCalendarClick),
                 DashboardActionItem("Galería", "🖼️", "Evidencias fotográficas", null, null, null, onGalleryClick)
             )
         )
