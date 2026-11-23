@@ -37,7 +37,6 @@ public class EvidenciaController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public List<EvidenciaResponse> listar() {
         return service.evidencias();
     }

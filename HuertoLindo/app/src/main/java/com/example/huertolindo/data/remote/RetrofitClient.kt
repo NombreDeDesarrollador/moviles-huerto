@@ -12,7 +12,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "http://10.0.2.2:8080/api/"
+    const val BASE_URL = "http://10.0.2.2:8080/api/"
+    val SERVER_URL: String = BASE_URL.removeSuffix("api/").removeSuffix("/")
     internal const val COOKIE_PREFERENCES = "huerto_backend_session"
 
     @Volatile

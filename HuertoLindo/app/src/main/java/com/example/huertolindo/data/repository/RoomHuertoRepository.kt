@@ -339,6 +339,19 @@ class RoomHuertoRepository(
             tareaDto.backendTareaToDomain(cultivo)
         } ?: emptyList()
 
+        val evidenciasDto = if (usuarioActual == null) {
+            null
+        } else {
+            try {
+                val resp = apiService.obtenerEvidencias()
+                if (resp.isSuccessful) resp.body() else null
+            } catch (exception: Exception) {
+                android.util.Log.w("RoomHuertoRepository", "No se pudieron cargar las evidencias del backend", exception)
+                null
+            }
+        }
+        val evidenciasRemotas = evidenciasDto?.map { it.toDomain() } ?: emptyList()
+
         database.withTransaction {
             sectores.forEach { database.sectorDao().insertar(it.toEntity()) }
             cultivos.forEach { database.cultivoDao().insertar(it.toEntity()) }
@@ -356,13 +369,23 @@ class RoomHuertoRepository(
                 }
                 database.tareaDao().insertar(tarea.toEntity())
             }
+            evidenciasRemotas.forEach { evidencia ->
+                database.evidenciaDao().insertar(evidencia.toEntity())
+            }
         }
 
         val localSnapshot = cargarSnapshotLocal()
+        val evidenciasCombinadas = if (evidenciasRemotas.isNotEmpty()) {
+            val remotasIds = evidenciasRemotas.map { it.id }.toSet()
+            localSnapshot.evidencias.filterNot { it.id in remotasIds } + evidenciasRemotas
+        } else {
+            localSnapshot.evidencias
+        }
         return localSnapshot.copy(
             sectores = sectores,
             cultivos = cultivos,
             tareas = tareasDto?.let { tareasRemotas } ?: localSnapshot.tareas,
+            evidencias = evidenciasCombinadas,
             advertencia = advertencia
         )
     }

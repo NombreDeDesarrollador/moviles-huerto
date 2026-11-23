@@ -65,12 +65,15 @@ data class TareaDto(
 
 data class EvidenciaDto(
     @SerializedName("id") val id: String,
-    @SerializedName("tareaId") val tareaId: String?,
-    @SerializedName("tipoAsociacion") val tipoAsociacion: String?,
-    @SerializedName("entidadId") val entidadId: String?,
-    @SerializedName("rutaArchivo") val rutaArchivo: String,
-    @SerializedName("descripcion") val descripcion: String?,
-    @SerializedName("fechaCreacion") val fechaCreacion: String
+    @SerializedName("tareaId") val tareaId: String? = null,
+    @SerializedName("tipoAsociacion") val tipoAsociacion: String? = null,
+    @SerializedName("entidadId") val entidadId: String? = null,
+    @SerializedName("rutaArchivo") val rutaArchivo: String? = null,
+    @SerializedName("rutaImagen") val rutaImagen: String? = null,
+    @SerializedName("descripcion") val descripcion: String? = null,
+    @SerializedName("comentario") val comentario: String? = null,
+    @SerializedName("fechaCreacion") val fechaCreacion: String? = null,
+    @SerializedName("fechaSubida") val fechaSubida: String? = null
 )
 
 data class ValidacionDto(
@@ -244,13 +247,13 @@ fun Tarea.toTareaEstadoBackend(): String = this.estado.toTareaEstadoBackend()
 
 fun EvidenciaDto.toDomain() = Evidencia(
     id = this.id,
-    tareaId = this.tareaId,
+    tareaId = this.tareaId ?: if (this.tipoAsociacion == "TAREA") this.entidadId else null,
     cultivoId = if (this.tipoAsociacion == "CULTIVO") this.entidadId else null,
     reporteId = if (this.tipoAsociacion == "REPORTE") this.entidadId else null,
     tipo = "foto",
-    rutaArchivo = this.rutaArchivo,
-    descripcion = this.descripcion ?: "",
-    fechaRegistro = this.fechaCreacion
+    rutaArchivo = this.rutaArchivo ?: this.rutaImagen.orEmpty(),
+    descripcion = this.descripcion ?: this.comentario.orEmpty(),
+    fechaRegistro = this.fechaCreacion ?: this.fechaSubida.orEmpty()
 )
 
 fun Evidencia.toDto() = EvidenciaDto(
@@ -263,8 +266,11 @@ fun Evidencia.toDto() = EvidenciaDto(
     },
     entidadId = this.tareaId ?: this.cultivoId ?: this.reporteId,
     rutaArchivo = this.rutaArchivo,
+    rutaImagen = this.rutaArchivo,
     descripcion = this.descripcion,
-    fechaCreacion = this.fechaRegistro
+    comentario = this.descripcion,
+    fechaCreacion = this.fechaRegistro,
+    fechaSubida = this.fechaRegistro
 )
 
 fun ValidacionDto.toDomain() = Validacion(

@@ -289,7 +289,9 @@ class HuertoViewModel(
         _listaSectores.value = snapshot.sectores
         _listaCultivos.value = snapshot.cultivos
         _listaTareas.value = snapshot.tareas
-        _evidenciasTareas.value = snapshot.evidencias.filter { File(it.rutaArchivo).isFile }
+        _evidenciasTareas.value = snapshot.evidencias.filter {
+            it.rutaArchivo.startsWith("http") || it.rutaArchivo.startsWith("/") || File(it.rutaArchivo).isFile
+        }
         _validacionesTareas.value = snapshot.validaciones
         _comentariosEntrega.value = evidenciasTareas.value
             .filter { !it.tareaId.isNullOrBlank() && it.descripcion.isNotBlank() }

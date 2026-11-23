@@ -9,6 +9,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.huertolindo.data.local.entity.ActividadTareaEntity
@@ -62,7 +63,7 @@ interface SectorDao {
     @Query("SELECT * FROM sectores WHERE id = :sectorId")
     suspend fun obtenerPorId(sectorId: String): SectorEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertar(sector: SectorEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -83,7 +84,7 @@ interface CultivoDao {
     @Query("SELECT * FROM cultivos WHERE sector_id = :sectorId")
     suspend fun obtenerPorSector(sectorId: String): List<CultivoEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertar(cultivo: CultivoEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -110,7 +111,7 @@ interface TareaDao {
     @Query("SELECT * FROM tareas WHERE id = :tareaId")
     suspend fun obtenerPorId(tareaId: String): TareaEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertar(tarea: TareaEntity)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -131,7 +132,7 @@ interface EvidenciaDao {
     @Query("SELECT * FROM evidencias WHERE tarea_id = :tareaId ORDER BY fecha_registro DESC")
     suspend fun obtenerPorTarea(tareaId: String): List<EvidenciaEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertar(evidencia: EvidenciaEntity)
 
     @androidx.room.Delete

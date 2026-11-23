@@ -56,7 +56,16 @@ public final class ApiDtos {
                                     Long tareaId, Long usuarioId, String usuarioNombre) {}
 
     public record EvidenciaResponse(Long id, String rutaImagen, String comentario, LocalDateTime fechaSubida,
-                                    Long tareaId, Long usuarioId, String usuarioNombre) {}
+                                    Long tareaId, Long usuarioId, String usuarioNombre,
+                                    String rutaArchivo, String descripcion, String fechaCreacion,
+                                    String tipoAsociacion, String entidadId) {
+        public EvidenciaResponse(Long id, String rutaImagen, String comentario, LocalDateTime fechaSubida,
+                                 Long tareaId, Long usuarioId, String usuarioNombre) {
+            this(id, rutaImagen, comentario, fechaSubida, tareaId, usuarioId, usuarioNombre,
+                 rutaImagen, comentario, fechaSubida != null ? fechaSubida.toString() : "",
+                 "TAREA", tareaId != null ? tareaId.toString() : null);
+        }
+    }
 
     public record ReporteRequest(@NotBlank String titulo, @NotBlank String descripcion,
                                  @NotBlank String gravedad, @NotNull Long cultivoId,
