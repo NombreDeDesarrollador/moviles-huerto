@@ -1176,7 +1176,11 @@ class HuertoViewModel(
         }
 
     private fun parsearFecha(fecha: String): Date? =
-        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }.parse(fecha)
+        try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }.parse(fecha)
+        } catch (_: Exception) {
+            null
+        }
 
     private fun persistir(operacion: suspend () -> Unit) {
         viewModelScope.launch {
