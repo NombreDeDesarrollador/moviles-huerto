@@ -46,6 +46,7 @@ fun PerfilUsuarioScreen(
     val context = LocalContext.current
 
     var uriPendiente by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var mostrarDialogoQuitarFoto by remember { mutableStateOf(false) }
     var mostrarConfirmarCierre by remember { mutableStateOf(false) }
 
     val selectorFotos = rememberLauncherForActivityResult(
@@ -142,7 +143,7 @@ fun PerfilUsuarioScreen(
                     Text("Cámara")
                 }
                 if (fotoPerfil != null) {
-                    OutlinedButton(onClick = { viewModel.actualizarFotoPerfil(null) }) {
+                    OutlinedButton(onClick = { mostrarDialogoQuitarFoto = true }) {
                         Text("Quitar")
                     }
                 }
@@ -294,6 +295,18 @@ fun PerfilUsuarioScreen(
                     Text("Cancelar")
                 }
             }
+        )
+    }
+
+    if (mostrarDialogoQuitarFoto) {
+        DialogoConfirmacion(
+            titulo = "Confirmar eliminación",
+            mensaje = "¿Estás seguro de que quieres quitar tu foto de perfil?",
+            onConfirmar = {
+                mostrarDialogoQuitarFoto = false
+                viewModel.actualizarFotoPerfil(null)
+            },
+            onDismiss = { mostrarDialogoQuitarFoto = false }
         )
     }
 }

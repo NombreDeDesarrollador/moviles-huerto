@@ -50,6 +50,7 @@ fun EvidenciaFotograficaSection(
     val fotosPendientes = remember { mutableStateListOf<Uri>() }
     var error by remember { mutableStateOf<String?>(null) }
     var uriCamaraPendiente by rememberSaveable { mutableStateOf<String?>(null) }
+    var evidenciaAEliminar by remember { mutableStateOf<Evidencia?>(null) }
 
     fun guardarFoto(uri: Uri) {
         fotosPendientes.add(uri)
@@ -152,7 +153,7 @@ fun EvidenciaFotograficaSection(
                 if (puedeEliminar) {
                     TextButton(
                         onClick = {
-                            onEliminarFoto(evidencia) { resultado -> error = resultado }
+                            evidenciaAEliminar = evidencia
                         }
                     ) {
                         Text("Quitar fotografía")
@@ -173,5 +174,16 @@ fun EvidenciaFotograficaSection(
                 Text("Guardando fotografía…")
             }
         }
+    }
+    evidenciaAEliminar?.let { ev ->
+        DialogoConfirmacion(
+            titulo = "Confirmar eliminación",
+            mensaje = "¿Estás seguro de que quieres eliminar esta fotografía?",
+            onConfirmar = {
+                evidenciaAEliminar = null
+                onEliminarFoto(ev) { resultado -> error = resultado }
+            },
+            onDismiss = { evidenciaAEliminar = null }
+        )
     }
 }

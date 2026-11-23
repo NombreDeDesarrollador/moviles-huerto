@@ -81,6 +81,7 @@ fun SectoresScreen(
     var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
     var sectorEnEdicionId by rememberSaveable { mutableStateOf<String?>(null) }
     val sectorEnEdicion = uiState.sectores.firstOrNull { it.id == sectorEnEdicionId }
+    var sectorAEliminar by remember { mutableStateOf<Sector?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     ScreenLayout("Sectores del huerto", onBack) {
         uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -116,13 +117,25 @@ fun SectoresScreen(
                             mostrarFormulario = true
                         }) { Text("Editar sector") }
                         OutlinedButton(onClick = {
-                            error = if (viewModel.eliminarSector(sector.id)) null
-                                else "No se puede eliminar un sector asociado a cultivos, tareas o reportes."
+                            sectorAEliminar = sector
                         }) { Text("Eliminar sector") }
                     }
                 }
             }
         }
+    }
+    sectorAEliminar?.let { sector ->
+        DialogoConfirmacion(
+            titulo = "Confirmar eliminación",
+            mensaje = "¿Estás seguro de que quieres eliminar el sector \"${sector.nombre}\"?",
+            onConfirmar = {
+                val idAEliminar = sector.id
+                sectorAEliminar = null
+                error = if (viewModel.eliminarSector(idAEliminar)) null
+                    else "No se puede eliminar un sector asociado a cultivos, tareas o reportes."
+            },
+            onDismiss = { sectorAEliminar = null }
+        )
     }
     if (mostrarFormulario) {
         FormularioSector(
@@ -160,6 +173,7 @@ fun DetalleSectorScreen(
     var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
     var cultivoEnEdicionId by rememberSaveable { mutableStateOf<String?>(null) }
     val cultivoEnEdicion = uiState.cultivos.firstOrNull { it.id == cultivoEnEdicionId }
+    var cultivoAEliminar by remember { mutableStateOf<Cultivo?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val sector = uiState.sectores.firstOrNull { it.id == sectorId }
     ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack) {
@@ -209,12 +223,24 @@ fun DetalleSectorScreen(
                             mostrarFormulario = true
                         }) { Text("Editar cultivo") }
                         OutlinedButton(onClick = {
-                            viewModel.eliminarCultivo(cultivo.id)
+                            cultivoAEliminar = cultivo
                         }) { Text("Eliminar cultivo") }
                     }
                 }
             }
         }
+    }
+    cultivoAEliminar?.let { cultivo ->
+        DialogoConfirmacion(
+            titulo = "Confirmar eliminación",
+            mensaje = "¿Estás seguro de que quieres eliminar el cultivo \"${cultivo.nombreComun}\"?",
+            onConfirmar = {
+                val idAEliminar = cultivo.id
+                cultivoAEliminar = null
+                viewModel.eliminarCultivo(idAEliminar)
+            },
+            onDismiss = { cultivoAEliminar = null }
+        )
     }
     if (mostrarFormulario) {
         FormularioCultivo(
@@ -636,6 +662,7 @@ fun DetalleTareaScreen(
     var uriCamaraPendiente by rememberSaveable(tareaId) { mutableStateOf<Uri?>(null) }
     var errorEntrega by rememberSaveable { mutableStateOf<String?>(null) }
     var enviandoEntrega by remember { mutableStateOf(false) }
+    var mostrarDialogoQuitarBorrador by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val selectorEvidencia = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -790,9 +817,7 @@ fun DetalleTareaScreen(
                     contentScale = ContentScale.Crop
                 )
                 TextButton(onClick = {
-                    imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
-                    imagenEntrega = null
-                    errorEntrega = null
+                    mostrarDialogoQuitarBorrador = true
                 }) { Text("Quitar fotografía") }
             }
             errorEntrega?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -819,6 +844,19 @@ fun DetalleTareaScreen(
                 Text(if (enviandoEntrega) "Enviando..." else "Entregar para revisión")
             }
         }
+    }
+    if (mostrarDialogoQuitarBorrador) {
+        DialogoConfirmacion(
+            titulo = "Confirmar eliminación",
+            mensaje = "¿Estás seguro de que quieres quitar esta fotografía seleccionada?",
+            onConfirmar = {
+                mostrarDialogoQuitarBorrador = false
+                imagenEntrega?.let { eliminarFotografiaTemporal(context, it) }
+                imagenEntrega = null
+                errorEntrega = null
+            },
+            onDismiss = { mostrarDialogoQuitarBorrador = false }
+        )
     }
     if (mostrarDialogoRechazo && tarea != null) {
         AlertDialog(
