@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tareas")
@@ -54,6 +55,14 @@ public class TareaController {
     @PatchMapping("/{id}/completar")
     public TareaResponse completar(@PathVariable Long id, Authentication authentication) {
         return service.completarTarea(id, authentication.getName(), esAdmin(authentication));
+    }
+
+    @PatchMapping("/{id}/estado")
+    public TareaResponse actualizarEstado(@PathVariable Long id,
+                                          @RequestBody Map<String, String> body,
+                                          Authentication authentication) {
+        String estado = body != null ? body.get("estado") : null;
+        return service.actualizarEstadoTarea(id, estado, authentication.getName(), esAdmin(authentication));
     }
 
     @PostMapping("/{id}/actividades")

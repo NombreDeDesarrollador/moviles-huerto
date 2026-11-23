@@ -1089,6 +1089,24 @@ class HuertoViewModel(
         return true
     }
 
+    fun asignarCultivoASector(cultivoId: String, sectorId: String): Boolean {
+        if (!esAdministrador) return false
+        val sectorExiste = listaSectores.value.any { it.id == sectorId }
+        if (!sectorExiste) return false
+        val cultivo = listaCultivos.value.firstOrNull { it.id == cultivoId } ?: return false
+        if (cultivo.sectorId == sectorId) return true
+
+        val actualizado = cultivo.copy(
+            sectorId = sectorId,
+            fechaCambioEstado = fechaActualConHora()
+        )
+        _listaCultivos.value = listaCultivos.value.map {
+            if (it.id == cultivoId) actualizado else it
+        }
+        persistir { huertoRepository.actualizarCultivo(actualizado) }
+        return true
+    }
+
     fun eliminarCultivo(cultivoId: String): Boolean {
         if (!esAdministrador ||
             reportesProblemas.value.any { it.cultivoId == cultivoId } ||

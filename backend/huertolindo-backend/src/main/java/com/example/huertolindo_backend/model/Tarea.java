@@ -33,6 +33,9 @@ public class Tarea {
     @Column(nullable = false)
     private boolean completada;
 
+    @Column
+    private String estado;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cultivo_id", nullable = false)
     private Cultivo cultivo;
@@ -40,4 +43,29 @@ public class Tarea {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "responsable_id", nullable = false)
     private Usuario responsable;
+
+    public String getEstado() {
+        if (estado == null || estado.isBlank()) {
+            return completada ? "COMPLETADA" : "PENDIENTE";
+        }
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+        if ("COMPLETADA".equalsIgnoreCase(estado) || "VALIDADA".equalsIgnoreCase(estado)) {
+            this.completada = true;
+        } else if ("PENDIENTE".equalsIgnoreCase(estado) || "EN_DESARROLLO".equalsIgnoreCase(estado) || "PENDIENTE_VALIDACION".equalsIgnoreCase(estado)) {
+            this.completada = false;
+        }
+    }
+
+    public void setCompletada(boolean completada) {
+        this.completada = completada;
+        if (completada) {
+            if (this.estado == null || "PENDIENTE".equalsIgnoreCase(this.estado) || "EN_DESARROLLO".equalsIgnoreCase(this.estado)) {
+                this.estado = "COMPLETADA";
+            }
+        }
+    }
 }

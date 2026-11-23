@@ -177,6 +177,16 @@ public class HuertoService {
         Tarea tarea = findTarea(id);
         verificarResponsable(tarea, correoActual, admin);
         tarea.setCompletada(true);
+        tarea.setEstado("COMPLETADA");
+        return tareaDto(tareas.save(tarea));
+    }
+
+    public TareaResponse actualizarEstadoTarea(Long id, String nuevoEstado, String correoActual, boolean admin) {
+        Tarea tarea = findTarea(id);
+        verificarResponsable(tarea, correoActual, admin);
+        if (nuevoEstado != null && !nuevoEstado.isBlank()) {
+            tarea.setEstado(nuevoEstado);
+        }
         return tareaDto(tareas.save(tarea));
     }
 
@@ -260,7 +270,13 @@ public class HuertoService {
         validacion.setObservacion(request.observacion());
         validacion.setFechaValidacion(LocalDateTime.now());
         validacion.setValidador(findUsuario(correoValidador));
-        if (request.tareaId() != null) validacion.setTarea(findTarea(request.tareaId()));
+        if (request.tareaId() != null) {
+            Tarea t = findTarea(request.tareaId());
+            validacion.setTarea(t);
+            t.setCompletada(request.aprobado());
+            t.setEstado(request.aprobado() ? "VALIDADA" : "RECHAZADA");
+            tareas.save(t);
+        }
         if (request.evidenciaId() != null) {
             validacion.setEvidencia(evidencias.findById(request.evidenciaId())
                     .orElseThrow(() -> new NotFoundException("Evidencia no encontrada")));
@@ -292,6 +308,11 @@ public class HuertoService {
         tarea.setTipo(request.tipo());
         tarea.setFechaProgramada(request.fechaProgramada());
         tarea.setCompletada(request.completada());
+        if (request.estado() != null && !request.estado().isBlank()) {
+            tarea.setEstado(request.estado());
+        } else if (tarea.getEstado() == null) {
+            tarea.setEstado(request.completada() ? "COMPLETADA" : "PENDIENTE");
+        }
         tarea.setCultivo(findCultivo(request.cultivoId()));
         tarea.setResponsable(findUsuario(request.responsableId()));
     }
@@ -350,7 +371,7 @@ public class HuertoService {
     private static TareaResponse tareaDto(Tarea t) {
         return new TareaResponse(t.getId(), t.getTitulo(), t.getDescripcion(), t.getTipo(),
                 t.getFechaProgramada(), t.isCompletada(), t.getCultivo().getId(), t.getCultivo().getNombre(),
-                t.getResponsable().getId(), t.getResponsable().getNombre());
+                t.getResponsable().getId(), t.getResponsable().getNombre(), t.getEstado());
     }
 
     private static ActividadResponse actividadDto(ActividadTarea a) {

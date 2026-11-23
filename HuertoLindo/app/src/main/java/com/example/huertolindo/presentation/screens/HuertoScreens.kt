@@ -20,15 +20,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.huertolindo.domain.security.ReglasHuerto
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
@@ -209,6 +220,8 @@ fun DetalleSectorScreen(
         FormularioCultivo(
             cultivo = cultivoEnEdicion,
             sectores = uiState.sectores.filter { it.id == sectorId },
+            todosLosSectores = uiState.sectores,
+            cultivosExistentes = uiState.cultivos,
             sectorIdInicial = sectorId,
             onDismiss = {
                 mostrarFormulario = false
@@ -238,6 +251,17 @@ fun DetalleSectorScreen(
                     cultivoEnEdicionId = null
                 } else {
                     error = "Completa los datos e ingresa fechas válidas; la cosecha estimada debe ser igual o posterior a la siembra."
+                }
+                guardado
+            },
+            onAsignarExistente = { cultivoId ->
+                val guardado = viewModel.asignarCultivoASector(cultivoId, sectorId)
+                if (guardado) {
+                    error = null
+                    mostrarFormulario = false
+                    cultivoEnEdicionId = null
+                } else {
+                    error = "No se pudo asignar el cultivo al sector."
                 }
                 guardado
             }
@@ -283,6 +307,8 @@ fun CultivosScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
         FormularioCultivo(
             cultivo = null,
             sectores = uiState.sectores,
+            todosLosSectores = uiState.sectores,
+            cultivosExistentes = uiState.cultivos,
             sectorIdInicial = uiState.sectores.firstOrNull()?.id,
             onDismiss = { mostrarFormulario = false },
             onSave = { nombre, sectorId, fechaSiembra, fechaCosecha, estado, frecuencia ->
@@ -296,6 +322,14 @@ fun CultivosScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
                 )
                 if (guardado) mostrarFormulario = false
                 guardado
+            },
+            onAsignarExistente = { cultivoId ->
+                val primerSector = uiState.sectores.firstOrNull()?.id
+                if (primerSector != null) {
+                    val guardado = viewModel.asignarCultivoASector(cultivoId, primerSector)
+                    if (guardado) mostrarFormulario = false
+                    guardado
+                } else false
             }
         )
     }
@@ -1592,13 +1626,36 @@ private fun FormularioCultivo(
     sectores: List<Sector>,
     sectorIdInicial: String?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String, String, String) -> Boolean
+    onSave: (String, String, String, String, String, String) -> Boolean,
+    todosLosSectores: List<Sector> = sectores,
+    cultivosExistentes: List<Cultivo> = emptyList(),
+    onAsignarExistente: ((String) -> Boolean)? = null
 ) {
+    val hoy = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+    }
+    val esEdicion = cultivo != null
+    var pestanaSeleccionada by rememberSaveable(cultivo?.id) {
+        mutableStateOf(if (!esEdicion && cultivosExistentes.isNotEmpty()) 0 else 1)
+    }
+
+    var cultivoElegidoId by rememberSaveable(cultivo?.id) {
+        mutableStateOf(
+            cultivosExistentes.firstOrNull { it.sectorId != sectorIdInicial }?.id
+                ?: cultivosExistentes.firstOrNull()?.id.orEmpty()
+        )
+    }
+    val cultivoElegido = remember(cultivoElegidoId, cultivosExistentes) {
+        cultivosExistentes.firstOrNull { it.id == cultivoElegidoId }
+    }
+
     var nombre by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.nombreComun.orEmpty()) }
     var sectorId by rememberSaveable(cultivo?.id) {
         mutableStateOf(cultivo?.sectorId ?: sectorIdInicial.orEmpty())
     }
-    var fechaSiembra by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.fechaSiembra.orEmpty()) }
+    var fechaSiembra by rememberSaveable(cultivo?.id) {
+        mutableStateOf(cultivo?.fechaSiembra.orEmpty().ifBlank { if (!esEdicion) hoy else "" })
+    }
     var fechaCosechaEstimada by rememberSaveable(cultivo?.id) {
         mutableStateOf(cultivo?.fechaCosechaEstimada.orEmpty())
     }
@@ -1607,89 +1664,262 @@ private fun FormularioCultivo(
     }
     var frecuencia by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
     var mostrarError by rememberSaveable { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (cultivo == null) "Agregar cultivo" else "Editar cultivo") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (sectores.size > 1) {
-                    CampoSeleccion(
-                        etiqueta = "Sector",
-                        opciones = sectores.map { it.id to it.nombre },
-                        seleccionado = sectorId,
-                        onSeleccionar = { sectorId = it }
-                    )
-                } else {
-                    Text("Sector: ${sectores.firstOrNull()?.nombre ?: "Sin sector"}")
+        title = {
+            Text(
+                when {
+                    esEdicion -> "Editar cultivo"
+                    pestanaSeleccionada == 0 -> "Agregar cultivo al sector"
+                    else -> "Crear nuevo cultivo"
                 }
-                OutlinedTextField(
-                    value = nombre,
-                    onValueChange = { nombre = it },
-                    label = { Text("Nombre del cultivo") },
-                    singleLine = true,
-                    isError = mostrarError && nombre.isBlank()
-                )
-                OutlinedTextField(
-                    value = fechaSiembra,
-                    onValueChange = { fechaSiembra = it },
-                    label = { Text("Fecha de siembra (AAAA-MM-DD)") },
-                    singleLine = true,
-                    isError = mostrarError
-                )
-                OutlinedTextField(
-                    value = fechaCosechaEstimada,
-                    onValueChange = { fechaCosechaEstimada = it },
-                    label = { Text("Cosecha estimada (AAAA-MM-DD)") },
-                    singleLine = true,
-                    isError = mostrarError
-                )
-                CampoSeleccion(
-                    etiqueta = "Estado de desarrollo",
-                    opciones = if (cultivo == null) {
-                        listOf("Sembrado").map { it to it }
-                    } else {
-                        EstadoCultivo.opciones.filter {
-                            it in setOf(
-                                "Sembrado",
-                                "En crecimiento",
-                                "Desarrollo",
-                                "Listo para cosechar",
-                                "Cosechado",
-                                "Con problemas"
-                            )
-                        }.map { it to it }
-                    },
-                    seleccionado = estado,
-                    onSeleccionar = { estado = it }
-                )
-                OutlinedTextField(
-                    value = frecuencia,
-                    onValueChange = { frecuencia = it },
-                    label = { Text("Frecuencia de riego (días)") },
-                    singleLine = true,
-                    isError = mostrarError && frecuencia.isBlank()
-                )
-                if (mostrarError) {
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (!esEdicion && cultivosExistentes.isNotEmpty()) {
+                    PrimaryTabRow(selectedTabIndex = pestanaSeleccionada) {
+                        Tab(
+                            selected = pestanaSeleccionada == 0,
+                            onClick = { pestanaSeleccionada = 0 },
+                            text = { Text("Existente en BD") }
+                        )
+                        Tab(
+                            selected = pestanaSeleccionada == 1,
+                            onClick = { pestanaSeleccionada = 1 },
+                            text = { Text("Crear nuevo") }
+                        )
+                    }
+                }
+
+                if (!esEdicion && pestanaSeleccionada == 0 && cultivosExistentes.isNotEmpty()) {
                     Text(
-                        "Completa todos los campos, elige un sector y usa fechas válidas; la cosecha debe ser igual o posterior a la siembra.",
-                        color = MaterialTheme.colorScheme.error
+                        "Selecciona un cultivo registrado en la base de datos:",
+                        style = MaterialTheme.typography.bodyMedium
                     )
+
+                    val opcionesCultivos = cultivosExistentes.map { c ->
+                        val nombreSector = todosLosSectores.firstOrNull { it.id == c.sectorId }?.nombre ?: "Sin sector"
+                        val sufijo = if (c.sectorId == sectorIdInicial) " (Ya en este sector)" else " (En: $nombreSector)"
+                        c.id to "${c.nombreComun}$sufijo"
+                    }
+
+                    CampoSeleccion(
+                        etiqueta = "Cultivo disponible",
+                        opciones = opcionesCultivos,
+                        seleccionado = cultivoElegidoId,
+                        onSeleccionar = { id ->
+                            cultivoElegidoId = id
+                            cultivosExistentes.firstOrNull { it.id == id }?.let { sel ->
+                                nombre = sel.nombreComun
+                                frecuencia = sel.frecuenciaRiego
+                                if (sel.fechaCosechaEstimada.isNotBlank()) {
+                                    fechaCosechaEstimada = sel.fechaCosechaEstimada
+                                }
+                            }
+                        }
+                    )
+
+                    cultivoElegido?.let { elegido ->
+                        val sectorActual = todosLosSectores.firstOrNull { it.id == elegido.sectorId }?.nombre ?: "Desconocido"
+                        val yaEnSectorActual = elegido.sectorId == sectorIdInicial
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "Variedad: ${elegido.nombreComun}",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text("Sector actual: $sectorActual", style = MaterialTheme.typography.bodySmall)
+                                Text("Estado: ${elegido.estadoDesarrollo}", style = MaterialTheme.typography.bodySmall)
+                                Text("Frecuencia de riego: cada ${elegido.frecuenciaRiego} días", style = MaterialTheme.typography.bodySmall)
+                                if (elegido.fechaSiembra.isNotBlank()) {
+                                    Text("Siembra original: ${elegido.fechaSiembra}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (yaEnSectorActual) {
+                                    Text(
+                                        "Este cultivo ya pertenece a este sector.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                nombre = elegido.nombreComun
+                                frecuencia = elegido.frecuenciaRiego
+                                fechaSiembra = hoy
+                                fechaCosechaEstimada = elegido.fechaCosechaEstimada
+                                estado = "Sembrado"
+                                pestanaSeleccionada = 1
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Usar como plantilla para personalizar")
+                        }
+                    }
+                } else {
+                    if (!esEdicion && cultivosExistentes.isNotEmpty()) {
+                        val nombresUnicos = cultivosExistentes.map { it.nombreComun }.distinct()
+                        Text("Sugerencias de la BD:", style = MaterialTheme.typography.labelSmall)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            nombresUnicos.take(4).forEach { sugerencia ->
+                                SuggestionChip(
+                                    onClick = {
+                                        nombre = sugerencia
+                                        val match = cultivosExistentes.firstOrNull { it.nombreComun == sugerencia }
+                                        if (match != null && frecuencia.isBlank()) {
+                                            frecuencia = match.frecuenciaRiego
+                                        }
+                                    },
+                                    label = { Text(sugerencia, fontSize = 12.sp) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (sectores.size > 1) {
+                        CampoSeleccion(
+                            etiqueta = "Sector",
+                            opciones = sectores.map { it.id to it.nombre },
+                            seleccionado = sectorId,
+                            onSeleccionar = { sectorId = it }
+                        )
+                    } else {
+                        Text("Sector: ${sectores.firstOrNull()?.nombre ?: "Sin sector"}")
+                    }
+
+                    OutlinedTextField(
+                        value = nombre,
+                        onValueChange = { nombre = it },
+                        label = { Text("Nombre del cultivo") },
+                        singleLine = true,
+                        isError = mostrarError && nombre.isBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = fechaSiembra,
+                        onValueChange = { fechaSiembra = it },
+                        label = { Text("Fecha de siembra (AAAA-MM-DD)") },
+                        singleLine = true,
+                        isError = mostrarError && !ReglasHuerto.esFechaIsoValida(fechaSiembra),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = fechaCosechaEstimada,
+                        onValueChange = { fechaCosechaEstimada = it },
+                        label = { Text("Cosecha estimada (AAAA-MM-DD)") },
+                        singleLine = true,
+                        isError = mostrarError && (fechaCosechaEstimada.isNotBlank() && !ReglasHuerto.fechaCosechaValida(fechaSiembra, fechaCosechaEstimada)),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    CampoSeleccion(
+                        etiqueta = "Estado de desarrollo",
+                        opciones = if (cultivo == null) {
+                            listOf("Sembrado").map { it to it }
+                        } else {
+                            EstadoCultivo.opciones.filter {
+                                it in setOf(
+                                    "Sembrado",
+                                    "En crecimiento",
+                                    "Desarrollo",
+                                    "Listo para cosechar",
+                                    "Cosechado",
+                                    "Con problemas"
+                                )
+                            }.map { it to it }
+                        },
+                        seleccionado = estado,
+                        onSeleccionar = { estado = it }
+                    )
+
+                    OutlinedTextField(
+                        value = frecuencia,
+                        onValueChange = { frecuencia = it },
+                        label = { Text("Frecuencia de riego (días)") },
+                        singleLine = true,
+                        isError = mostrarError && frecuencia.isBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (mostrarError) {
+                        Text(
+                            "Completa todos los campos, elige un sector y usa fechas válidas; la cosecha debe ser igual o posterior a la siembra.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                mostrarError = !onSave(
-                    nombre,
-                    sectorId,
-                    fechaSiembra,
-                    fechaCosechaEstimada,
-                    estado,
-                    frecuencia
-                )
-            }) { Text(if (cultivo == null) "Guardar" else "Guardar cambios") }
+            if (!esEdicion && pestanaSeleccionada == 0 && cultivosExistentes.isNotEmpty()) {
+                val elegido = cultivoElegido
+                val yaEnSectorActual = elegido?.sectorId == sectorIdInicial
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (onAsignarExistente != null && elegido != null && !yaEnSectorActual) {
+                        Button(onClick = {
+                            val ok = onAsignarExistente(elegido.id)
+                            if (!ok) mostrarError = true
+                        }) {
+                            Text("Asignar a este sector")
+                        }
+                    } else if (elegido != null) {
+                        Button(onClick = {
+                            val siembra = if (fechaSiembra.isNotBlank()) fechaSiembra else hoy
+                            val cosecha = if (elegido.fechaCosechaEstimada.isNotBlank() && elegido.fechaCosechaEstimada >= siembra) {
+                                elegido.fechaCosechaEstimada
+                            } else {
+                                siembra
+                            }
+                            val ok = onSave(
+                                elegido.nombreComun,
+                                sectorIdInicial ?: sectorId,
+                                siembra,
+                                cosecha,
+                                "Sembrado",
+                                elegido.frecuenciaRiego
+                            )
+                            mostrarError = !ok
+                        }) {
+                            Text("Plantar en este sector")
+                        }
+                    }
+                }
+            } else {
+                TextButton(onClick = {
+                    mostrarError = !onSave(
+                        nombre,
+                        sectorId,
+                        fechaSiembra,
+                        fechaCosechaEstimada,
+                        estado,
+                        frecuencia
+                    )
+                }) {
+                    Text(if (cultivo == null) "Guardar" else "Guardar cambios")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
     )
 }
 

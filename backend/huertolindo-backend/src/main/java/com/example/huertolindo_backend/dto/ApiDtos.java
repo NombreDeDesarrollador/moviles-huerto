@@ -33,10 +33,24 @@ public final class ApiDtos {
 
     public record TareaRequest(@NotBlank String titulo, String descripcion, @NotNull TipoTarea tipo,
                                @NotNull LocalDate fechaProgramada, boolean completada,
-                               @NotNull Long cultivoId, @NotNull Long responsableId) {}
+                               @NotNull Long cultivoId, @NotNull Long responsableId,
+                               String estado) {
+        public TareaRequest(@NotBlank String titulo, String descripcion, @NotNull TipoTarea tipo,
+                            @NotNull LocalDate fechaProgramada, boolean completada,
+                            @NotNull Long cultivoId, @NotNull Long responsableId) {
+            this(titulo, descripcion, tipo, fechaProgramada, completada, cultivoId, responsableId, null);
+        }
+    }
     public record TareaResponse(Long id, String titulo, String descripcion, TipoTarea tipo,
                                 LocalDate fechaProgramada, boolean completada, Long cultivoId,
-                                String cultivoNombre, Long responsableId, String responsableNombre) {}
+                                String cultivoNombre, Long responsableId, String responsableNombre,
+                                String estado) {
+        public TareaResponse(Long id, String titulo, String descripcion, TipoTarea tipo,
+                             LocalDate fechaProgramada, boolean completada, Long cultivoId,
+                             String cultivoNombre, Long responsableId, String responsableNombre) {
+            this(id, titulo, descripcion, tipo, fechaProgramada, completada, cultivoId, cultivoNombre, responsableId, responsableNombre, completada ? "COMPLETADA" : "PENDIENTE");
+        }
+    }
     public record ActividadRequest(@NotBlank String descripcion) {}
     public record ActividadResponse(Long id, String descripcion, LocalDateTime fechaRegistro,
                                     Long tareaId, Long usuarioId, String usuarioNombre) {}
