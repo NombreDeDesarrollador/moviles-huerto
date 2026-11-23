@@ -1,20 +1,27 @@
 package com.example.huertolindo.presentation.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +48,13 @@ fun DashboardAction(
     val cardShape = RoundedCornerShape(16.dp)
     val bgColor = action.containerColor ?: MaterialTheme.colorScheme.primaryContainer
     val fgColor = action.contentColor ?: MaterialTheme.colorScheme.onPrimaryContainer
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(120),
+        label = "dashboard-action-scale"
+    )
 
     Card(
         onClick = action.onClick,
@@ -48,7 +62,12 @@ fun DashboardAction(
             .fillMaxWidth()
             .height(130.dp)
             .animateContentSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .semantics { contentDescription = "${action.title}: ${action.subtitle ?: ""}" },
+        interactionSource = interactionSource,
         shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = bgColor,

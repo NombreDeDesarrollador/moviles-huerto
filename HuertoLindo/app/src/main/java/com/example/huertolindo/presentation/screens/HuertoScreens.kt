@@ -3,9 +3,17 @@ package com.example.huertolindo.presentation.screens
 import android.net.Uri
 import android.content.ActivityNotFoundException
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,10 +26,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -51,6 +64,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -84,8 +98,13 @@ fun SectoresScreen(
     val sectorEnEdicion = uiState.sectores.firstOrNull { it.id == sectorEnEdicionId }
     var sectorAEliminar by remember { mutableStateOf<Sector?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    ScreenLayout("Sectores del huerto", onBack) {
-        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    val estadoLista = when {
+        uiState.cargandoDatos && uiState.sectores.isEmpty() -> "cargando"
+        uiState.sectores.isEmpty() && uiState.errorPersistencia != null -> "error"
+        uiState.sectores.isEmpty() -> "vacio"
+        else -> "contenido"
+    }
+    ScreenLayout("Sectores del huerto", onBack, scrollContent = false) {
         if (esAdministrador) {
             Button(onClick = {
                 sectorEnEdicionId = null
@@ -95,31 +114,59 @@ fun SectoresScreen(
                 Text(error ?: "", color = MaterialTheme.colorScheme.error)
             }
         }
-        if (uiState.sectores.isEmpty()) {
-            Text("Todavía no hay sectores registrados.")
+        if (uiState.sectores.isNotEmpty()) {
+            uiState.errorPersistencia?.let {
+                Text(it, color = MaterialTheme.colorScheme.error)
+            }
         }
-        uiState.sectores.forEach { sector ->
-            ElevatedCard(
-                onClick = { onSectorClick(sector.id) },
-                modifier = Modifier.fillMaxWidth().animateContentSize()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
-                    Text("Ubicación: ${sector.ubicacion.ifBlank { "Sin ubicación registrada" }}")
-                    Text(sector.descripcion)
-                    HuertoStatusChip(sector.estado)
-                    Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
-                    if (sector.estado == "En mantenimiento") {
-                        Text("Mantenimiento: ${sector.fechaInicioMantenimiento} al ${sector.fechaTerminoMantenimiento}")
-                    }
-                    if (esAdministrador) {
-                        OutlinedButton(onClick = {
-                            sectorEnEdicionId = sector.id
-                            mostrarFormulario = true
-                        }) { Text("Editar sector") }
-                        OutlinedButton(onClick = {
-                            sectorAEliminar = sector
-                        }) { Text("Eliminar sector") }
+        Crossfade(
+            targetState = estadoLista,
+            modifier = Modifier.weight(1f),
+            label = "sectores-content"
+        ) { estado ->
+            when (estado) {
+                "cargando" -> CircularProgressIndicator()
+                "error" -> Text(
+                    uiState.errorPersistencia.orEmpty(),
+                    color = MaterialTheme.colorScheme.error
+                )
+                "vacio" -> Text("Todavía no hay sectores registrados.")
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items = uiState.sectores, key = { it.id }) { sector ->
+                        ElevatedCard(
+                            onClick = { onSectorClick(sector.id) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem()
+                                .animateContentSize()
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(sector.nombre, style = MaterialTheme.typography.titleMedium)
+                                Text("Ubicación: ${sector.ubicacion.ifBlank { "Sin ubicación registrada" }}")
+                                Text(sector.descripcion)
+                                HuertoStatusChip(sector.estado)
+                                Text("${uiState.cultivos.count { it.sectorId == sector.id }} cultivos")
+                                AnimatedVisibility(
+                                    visible = sector.estado == "En mantenimiento",
+                                    enter = expandVertically() + fadeIn(),
+                                    exit = shrinkVertically() + fadeOut()
+                                ) {
+                                    Text("Mantenimiento: ${sector.fechaInicioMantenimiento} al ${sector.fechaTerminoMantenimiento}")
+                                }
+                                if (esAdministrador) {
+                                    OutlinedButton(onClick = {
+                                        sectorEnEdicionId = sector.id
+                                        mostrarFormulario = true
+                                    }) { Text("Editar sector") }
+                                    OutlinedButton(onClick = {
+                                        sectorAEliminar = sector
+                                    }) { Text("Eliminar sector") }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -177,8 +224,17 @@ fun DetalleSectorScreen(
     var cultivoAEliminar by remember { mutableStateOf<Cultivo?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val sector = uiState.sectores.firstOrNull { it.id == sectorId }
-    ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack) {
-        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    val cultivos = uiState.cultivos.filter { it.sectorId == sectorId }
+    val estadoCultivos = when {
+        uiState.cargandoDatos && cultivos.isEmpty() -> "cargando"
+        cultivos.isEmpty() && uiState.errorPersistencia != null -> "error"
+        cultivos.isEmpty() -> "vacio"
+        else -> "contenido"
+    }
+    ScreenLayout(sector?.nombre ?: "Sector no encontrado", onBack, scrollContent = false) {
+        if (cultivos.isNotEmpty()) {
+            uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
         if (sector == null) {
             Text("El sector seleccionado ya no está disponible.")
             return@ScreenLayout
@@ -199,33 +255,53 @@ fun DetalleSectorScreen(
                 Text(error ?: "", color = MaterialTheme.colorScheme.error)
             }
         }
-        val cultivos = uiState.cultivos.filter { it.sectorId == sector.id }
-        if (cultivos.isEmpty()) Text("Este sector todavía no tiene cultivos.")
-        cultivos.forEach { cultivo ->
-            ElevatedCard(
-                onClick = { onCultivoClick(cultivo.id) },
-                modifier = Modifier.fillMaxWidth().animateContentSize()
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Desarrollo:")
-                        HuertoStatusChip(cultivo.estadoDesarrollo)
-                    }
-                    Text("Siembra: ${cultivo.fechaSiembra}")
-                    Text(
-                        "Cosecha estimada: ${
-                            cultivo.fechaCosechaEstimada.ifBlank { "Sin fecha registrada" }
-                        }"
-                    )
-                    if (esAdministrador) {
-                        OutlinedButton(onClick = {
-                            cultivoEnEdicionId = cultivo.id
-                            mostrarFormulario = true
-                        }) { Text("Editar cultivo") }
-                        OutlinedButton(onClick = {
-                            cultivoAEliminar = cultivo
-                        }) { Text("Eliminar cultivo") }
+        Crossfade(
+            targetState = estadoCultivos,
+            modifier = Modifier.weight(1f),
+            label = "sector-cultivos-content"
+        ) { estado ->
+            when (estado) {
+                "cargando" -> CircularProgressIndicator()
+                "error" -> Text(
+                    uiState.errorPersistencia.orEmpty(),
+                    color = MaterialTheme.colorScheme.error
+                )
+                "vacio" -> Text("Este sector todavía no tiene cultivos.")
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items = cultivos, key = { it.id }) { cultivo ->
+                        ElevatedCard(
+                            onClick = { onCultivoClick(cultivo.id) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem()
+                                .animateContentSize()
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Desarrollo:")
+                                    HuertoStatusChip(cultivo.estadoDesarrollo)
+                                }
+                                Text("Siembra: ${cultivo.fechaSiembra}")
+                                Text(
+                                    "Cosecha estimada: ${
+                                        cultivo.fechaCosechaEstimada.ifBlank { "Sin fecha registrada" }
+                                    }"
+                                )
+                                if (esAdministrador) {
+                                    OutlinedButton(onClick = {
+                                        cultivoEnEdicionId = cultivo.id
+                                        mostrarFormulario = true
+                                    }) { Text("Editar cultivo") }
+                                    OutlinedButton(onClick = {
+                                        cultivoAEliminar = cultivo
+                                    }) { Text("Eliminar cultivo") }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -300,8 +376,16 @@ fun DetalleSectorScreen(
 fun CultivosScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
     val uiState = collectHuertoUiState(viewModel)
     var mostrarFormulario by rememberSaveable { mutableStateOf(false) }
-    ScreenLayout("Cultivos del huerto", onBack) {
-        uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    val estadoLista = when {
+        uiState.cargandoDatos && uiState.cultivos.isEmpty() -> "cargando"
+        uiState.cultivos.isEmpty() && uiState.errorPersistencia != null -> "error"
+        uiState.cultivos.isEmpty() -> "vacio"
+        else -> "contenido"
+    }
+    ScreenLayout("Cultivos del huerto", onBack, scrollContent = false) {
+        if (uiState.cultivos.isNotEmpty()) {
+            uiState.errorPersistencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
         if (uiState.sectores.isEmpty()) {
             Text("Primero debes crear un sector para poder asociar cultivos.")
         }
@@ -311,21 +395,41 @@ fun CultivosScreen(viewModel: HuertoViewModel, onBack: () -> Unit) {
         ) {
             Text("Crear cultivo")
         }
-        if (uiState.cultivos.isEmpty()) {
-            Text("Todavía no hay cultivos registrados.")
-        }
-        uiState.cultivos.forEach { cultivo ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Sector: ${
-                            uiState.sectores.firstOrNull { it.id == cultivo.sectorId }?.nombre
-                                ?: "No disponible"
-                        }"
-                    )
-                    Text("Estado: ${cultivo.estadoDesarrollo}")
-                    Text("Fecha de siembra: ${cultivo.fechaSiembra}")
+        Crossfade(
+            targetState = estadoLista,
+            modifier = Modifier.weight(1f),
+            label = "cultivos-content"
+        ) { estado ->
+            when (estado) {
+                "cargando" -> CircularProgressIndicator()
+                "error" -> Text(
+                    uiState.errorPersistencia.orEmpty(),
+                    color = MaterialTheme.colorScheme.error
+                )
+                "vacio" -> Text("Todavía no hay cultivos registrados.")
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items = uiState.cultivos, key = { it.id }) { cultivo ->
+                        ElevatedCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem()
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(cultivo.nombreComun, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Sector: ${
+                                        uiState.sectores.firstOrNull { it.id == cultivo.sectorId }?.nombre
+                                            ?: "No disponible"
+                                    }"
+                                )
+                                Text("Estado: ${cultivo.estadoDesarrollo}")
+                                Text("Fecha de siembra: ${cultivo.fechaSiembra}")
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1578,6 +1682,13 @@ private fun FormularioSector(
         mutableStateOf(sector?.fechaTerminoMantenimiento.orEmpty())
     }
     var mostrarError by rememberSaveable { mutableStateOf(false) }
+    val interaccionGuardar = remember { MutableInteractionSource() }
+    val guardarPresionado by interaccionGuardar.collectIsPressedAsState()
+    val escalaGuardar by animateFloatAsState(
+        targetValue = if (guardarPresionado) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "sector-save-scale"
+    )
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (sector == null) "Agregar sector" else "Editar sector") },
@@ -1640,16 +1751,23 @@ private fun FormularioSector(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                mostrarError = !onSave(
-                    nombre,
-                    ubicacion,
-                    descripcion,
-                    estado,
-                    inicioMantenimiento,
-                    terminoMantenimiento
-                )
-            }) {
+            TextButton(
+                onClick = {
+                    mostrarError = !onSave(
+                        nombre,
+                        ubicacion,
+                        descripcion,
+                        estado,
+                        inicioMantenimiento,
+                        terminoMantenimiento
+                    )
+                },
+                modifier = Modifier.graphicsLayer {
+                    scaleX = escalaGuardar
+                    scaleY = escalaGuardar
+                },
+                interactionSource = interaccionGuardar
+            ) {
                 Text(if (sector == null) "Guardar" else "Guardar cambios")
             }
         },
@@ -1701,6 +1819,13 @@ private fun FormularioCultivo(
     }
     var frecuencia by rememberSaveable(cultivo?.id) { mutableStateOf(cultivo?.frecuenciaRiego.orEmpty()) }
     var mostrarError by rememberSaveable { mutableStateOf(false) }
+    val interaccionGuardar = remember { MutableInteractionSource() }
+    val guardarPresionado by interaccionGuardar.collectIsPressedAsState()
+    val escalaGuardar by animateFloatAsState(
+        targetValue = if (guardarPresionado) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "cultivo-save-scale"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1914,7 +2039,10 @@ private fun FormularioCultivo(
                         Button(onClick = {
                             val ok = onAsignarExistente(elegido.id)
                             if (!ok) mostrarError = true
-                        }) {
+                        }, modifier = Modifier.graphicsLayer {
+                            scaleX = escalaGuardar
+                            scaleY = escalaGuardar
+                        }, interactionSource = interaccionGuardar) {
                             Text("Asignar a este sector")
                         }
                     } else if (elegido != null) {
@@ -1934,22 +2062,32 @@ private fun FormularioCultivo(
                                 elegido.frecuenciaRiego
                             )
                             mostrarError = !ok
-                        }) {
+                        }, modifier = Modifier.graphicsLayer {
+                            scaleX = escalaGuardar
+                            scaleY = escalaGuardar
+                        }, interactionSource = interaccionGuardar) {
                             Text("Plantar en este sector")
                         }
                     }
                 }
             } else {
-                TextButton(onClick = {
-                    mostrarError = !onSave(
-                        nombre,
-                        sectorId,
-                        fechaSiembra,
-                        fechaCosechaEstimada,
-                        estado,
-                        frecuencia
-                    )
-                }) {
+                TextButton(
+                    onClick = {
+                        mostrarError = !onSave(
+                            nombre,
+                            sectorId,
+                            fechaSiembra,
+                            fechaCosechaEstimada,
+                            estado,
+                            frecuencia
+                        )
+                    },
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = escalaGuardar
+                        scaleY = escalaGuardar
+                    },
+                    interactionSource = interaccionGuardar
+                ) {
                     Text(if (cultivo == null) "Guardar" else "Guardar cambios")
                 }
             }
@@ -2100,12 +2238,17 @@ private fun CampoSeleccion(
 }
 
 @Composable
-private fun ScreenLayout(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun ScreenLayout(
+    title: String,
+    onBack: () -> Unit,
+    scrollContent: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

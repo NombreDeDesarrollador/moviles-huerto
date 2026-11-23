@@ -6,7 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,6 +45,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val huertoState by huertoViewModel.uiState.collectAsState()
                     var pantallaActual by rememberSaveable { mutableStateOf("login") }
+                    var direccionNavegacion by remember { mutableStateOf(1) }
                     var historialPantallas by rememberSaveable {
                         mutableStateOf(listOf("login"))
                     }
@@ -50,17 +56,20 @@ class MainActivity : ComponentActivity() {
 
                     fun navegarA(pantalla: String) {
                         if (pantalla == pantallaActual) return
+                        direccionNavegacion = 1
                         historialPantallas = historialPantallas + pantalla
                         pantallaActual = pantalla
                     }
 
                     fun reemplazarPantalla(pantalla: String) {
+                        direccionNavegacion = if (pantalla == "login") -1 else 1
                         historialPantallas = listOf(pantalla)
                         pantallaActual = pantalla
                     }
 
                     fun volverPantalla() {
                         if (historialPantallas.size <= 1) return
+                        direccionNavegacion = -1
                         historialPantallas = historialPantallas.dropLast(1)
                         pantallaActual = historialPantallas.last()
                     }
@@ -76,7 +85,22 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    Crossfade(targetState = pantallaActual, label = "screen-navigation") { pantalla ->
+                    AnimatedContent(
+                        targetState = pantallaActual,
+                        modifier = Modifier.fillMaxSize(),
+                        transitionSpec = {
+                            val direccion = if (direccionNavegacion > 0) {
+                                AnimatedContentTransitionScope.SlideDirection.Left
+                            } else {
+                                AnimatedContentTransitionScope.SlideDirection.Right
+                            }
+                            (fadeIn(animationSpec = tween(300)) +
+                                slideIntoContainer(direccion, animationSpec = tween(300))) togetherWith
+                                (fadeOut(animationSpec = tween(300)) +
+                                    slideOutOfContainer(direccion, animationSpec = tween(300)))
+                        },
+                        label = "screen-navigation"
+                    ) { pantalla ->
                         when {
                             pantalla !in setOf("login", "registro") &&
                                 huertoState.usuarioActual == null &&

@@ -4,15 +4,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -30,6 +39,13 @@ fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var mensajeError by rememberSaveable { mutableStateOf<String?>(null) }
     var cargando by remember { mutableStateOf(false) }
+    val botonLoginInteraction = remember { MutableInteractionSource() }
+    val botonLoginPresionado by botonLoginInteraction.collectIsPressedAsState()
+    val escalaBotonLogin by animateFloatAsState(
+        targetValue = if (botonLoginPresionado) 0.96f else 1f,
+        animationSpec = tween(120),
+        label = "login-button-scale"
+    )
 
     Column(
         modifier = Modifier
@@ -98,7 +114,11 @@ fun LoginScreen(
             isError = mensajeError != null
         )
 
-        AnimatedVisibility(mensajeError != null) {
+        AnimatedVisibility(
+            visible = mensajeError != null,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
             mensajeError?.let { error ->
                 Column {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -133,7 +153,13 @@ fun LoginScreen(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = escalaBotonLogin
+                    scaleY = escalaBotonLogin
+                },
+            interactionSource = botonLoginInteraction,
             enabled = !cargando && !uiState.cargandoDatos
         ) {
             if (cargando || uiState.cargandoDatos) {
