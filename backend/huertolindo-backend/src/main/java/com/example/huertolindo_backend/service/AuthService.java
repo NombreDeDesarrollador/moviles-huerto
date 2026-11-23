@@ -47,7 +47,7 @@ public class AuthService {
     @Transactional(readOnly = true)
     public UsuarioResponse currentUser(String correo) {
         return usuarios.findByCorreo(correo).map(AuthService::toResponse)
-                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("No existe un usuario con el correo " + correo));
     }
 
     private static UsuarioResponse toResponse(Usuario usuario) {

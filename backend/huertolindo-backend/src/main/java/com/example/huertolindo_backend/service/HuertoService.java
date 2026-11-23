@@ -279,7 +279,7 @@ public class HuertoService {
         }
         if (request.evidenciaId() != null) {
             validacion.setEvidencia(evidencias.findById(request.evidenciaId())
-                    .orElseThrow(() -> new NotFoundException("Evidencia no encontrada")));
+                    .orElseThrow(() -> new NotFoundException("No existe una evidencia con el id " + request.evidenciaId())));
         }
         return validacionDto(validaciones.save(validacion));
     }
@@ -332,27 +332,27 @@ public class HuertoService {
     }
 
     private Usuario findUsuario(Long id) {
-        return usuarios.findById(id).orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        return usuarios.findById(id).orElseThrow(() -> new NotFoundException("No existe un usuario con el id " + id));
     }
 
     private Usuario findUsuario(String correo) {
-        return usuarios.findByCorreo(correo).orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
+        return usuarios.findByCorreo(correo).orElseThrow(() -> new NotFoundException("No existe un usuario con el correo " + correo));
     }
 
     private Sector findSector(Long id) {
-        return sectores.findById(id).orElseThrow(() -> new NotFoundException("Sector no encontrado"));
+        return sectores.findById(id).orElseThrow(() -> new NotFoundException("No existe un sector con el id " + id));
     }
 
     private Cultivo findCultivo(Long id) {
-        return cultivos.findById(id).orElseThrow(() -> new NotFoundException("Cultivo no encontrado"));
+        return cultivos.findById(id).orElseThrow(() -> new NotFoundException("No existe un cultivo con el id " + id));
     }
 
     private Tarea findTarea(Long id) {
-        return tareas.findById(id).orElseThrow(() -> new NotFoundException("Tarea no encontrada"));
+        return tareas.findById(id).orElseThrow(() -> new NotFoundException("No existe una tarea con el id " + id));
     }
 
     private ReporteProblema findReporte(Long id) {
-        return reportes.findById(id).orElseThrow(() -> new NotFoundException("Reporte no encontrado"));
+        return reportes.findById(id).orElseThrow(() -> new NotFoundException("No existe un reporte con el id " + id));
     }
 
     private static UsuarioResponse usuarioDto(Usuario u) {

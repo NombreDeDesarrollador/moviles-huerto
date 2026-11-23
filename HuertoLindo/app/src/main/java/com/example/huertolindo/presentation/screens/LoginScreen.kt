@@ -113,41 +113,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Cuentas de prueba")
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            TextButton(
-                onClick = {
-                    correo = "docente@huertolindo.cl"
-                    password = "HuertoDocente2026!"
-                    mensajeError = null
-                }
-            ) { Text("Docente Backend") }
-            TextButton(
-                onClick = {
-                    correo = "estudiante1@huertolindo.cl"
-                    password = "HuertoEstudiante2026!"
-                    mensajeError = null
-                }
-            ) { Text("Estudiante Backend") }
-        }
-        TextButton(
-            onClick = {
-                correo = "docente@huertolindo.test"
-                password = "HuertoDocente2026!"
-                mensajeError = null
-            }
-        ) { Text("Usar cuenta docente local") }
-        TextButton(
-            onClick = {
-                correo = "estudiante@huertolindo.test"
-                password = "HuertoEstudiante2026!"
-                mensajeError = null
-            }
-        ) { Text("Usar cuenta estudiante local") }
-
         Button(
             onClick = {
                 if (correo.isBlank() || password.isBlank()) {
